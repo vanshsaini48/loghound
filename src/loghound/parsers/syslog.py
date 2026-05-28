@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
-
+from dateutil import parser as dateutil_parser
+from src.loghound.events import Event
 PATTERN = re.compile(
     r'^([A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})'  # timestamp
     r'\s+(\S+)'                                           # hostname
@@ -15,14 +16,20 @@ def parse_file(file_path: Path):
             line = line.strip()
             match = PATTERN.match(line)
             if match:
-                yield {
-                    'timestamp': match.group(1),
-                    'hostname':  match.group(2),
-                    'process':   match.group(3),
-                    'pid':       match.group(4),
-                    'message':   match.group(5),
-                    'raw':       line,
-                }
+                yield Event(
+                    timestamp=dateutil_parser.parse(match.group(1)),
+                    source=str(file_path),
+                    event_type='syslog',
+                    source_ip=None,
+                    username=None,
+                    raw=line,
+                    fields={
+                        'hostname': match.group(2),
+                        'process':  match.group(3),
+                        'pid':      match.group(4),
+                        'message':  match.group(5),
+                    }
+                )
             else:
                 skipped += 1
     if skipped:
