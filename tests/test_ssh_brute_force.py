@@ -1,6 +1,6 @@
 from pathlib import Path
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.detections.ssh_brute_force import SSHBruteForce
+from loghound.parsers.syslog import parse_file
+from loghound.detections.ssh_brute_force import SSHBruteForce
 
 
 def test_detects_brute_force():

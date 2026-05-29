@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.engine import run_engine
+from .parsers.syslog import parse_file
+from .engine import run_engine
 
 def main():
     if len(sys.argv) < 2:

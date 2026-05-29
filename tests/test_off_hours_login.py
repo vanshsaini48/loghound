@@ -1,8 +1,8 @@
 from datetime import datetime
 from pathlib import Path
-from src.loghound.events import Event
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.detections.off_hours_login import OffHoursLogin
+from loghound.events import Event
+from loghound.parsers.syslog import parse_file
+from loghound.detections.off_hours_login import OffHoursLogin
 
 def test_detects_off_hours_login():
     """Positive test: login at 2 AM should flag."""

@@ -1,5 +1,5 @@
-from src.loghound.detections import REGISTRY
-from src.loghound.findings import Finding
+from .detections import REGISTRY
+from .events import Finding
 
 # Severity ranking (lower rank = higher priority)
 SEVERITY_RANK = {

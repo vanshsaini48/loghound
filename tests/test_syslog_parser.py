@@ -1,6 +1,6 @@
 from pathlib import Path
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.events import Event
+from loghound.parsers.syslog import parse_file
+from loghound.events import Event
 from datetime import datetime
 
 FIXTURE = Path('tests/fixtures/sample_auth.log')

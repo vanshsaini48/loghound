@@ -1,6 +1,6 @@
 from datetime import time
-from src.loghound.events import Event
-from src.loghound.findings import Finding
+from ..events import Event
+from ..events import Finding
 
 class OffHoursLogin:
     name = "off_hours_login"

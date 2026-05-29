@@ -1,6 +1,6 @@
 from pathlib import Path
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.engine import run_engine
+from loghound.parsers.syslog import parse_file
+from loghound.engine import run_engine
 
 def test_engine_runs_all_detections():
     """Integration test: engine runs all three detections and sorts findings."""

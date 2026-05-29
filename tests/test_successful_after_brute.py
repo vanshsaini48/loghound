@@ -1,6 +1,6 @@
 from pathlib import Path
-from src.loghound.parsers.syslog import parse_file
-from src.loghound.detections.successful_after_brute import SuccessfulAfterBrute
+from loghound.parsers.syslog import parse_file
+from loghound.detections.successful_after_brute import SuccessfulAfterBrute
 
 
 def test_detects_successful_after_brute():

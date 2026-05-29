@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 from dateutil import parser as dateutil_parser
-from src.loghound.events import Event
+from ..events import Event
 
 PATTERN = re.compile(
     r'^([A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})'  # timestamp
