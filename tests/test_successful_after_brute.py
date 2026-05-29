@@ -3,18 +3,19 @@ from loghound.parsers.syslog import parse_file
 from loghound.detections.successful_after_brute import SuccessfulAfterBrute
 
 
-def test_detects_successful_after_brute():
+def test_detects_successful_after_brute(test_config):
     """Positive case: the fixture has a brute-force run followed by a successful login."""
     events = list(parse_file(Path('tests/fixtures/sample_auth.log')))
     detection = SuccessfulAfterBrute()
-    findings = detection.run(events, {"threshold": 5, "lookback_minutes": 60})
+    config = test_config["detections"]["successful_after_brute"]
+    findings = detection.run(events, config)
     assert len(findings) == 1
     assert findings[0].entities["source_ip"] == "203.0.113.42"
     assert findings[0].severity == "critical"
     assert findings[0].attack_id == "T1110"
 
 
-def test_does_not_flag_success_without_brute():
+def test_does_not_flag_success_without_brute(test_config):
     """Negative case: a successful login after only a couple of failures is not a compromise."""
     tmp = Path('tests/fixtures/success_without_brute.log')
     tmp.write_text(
@@ -24,6 +25,7 @@ def test_does_not_flag_success_without_brute():
     )
     events = list(parse_file(tmp))
     detection = SuccessfulAfterBrute()
-    findings = detection.run(events, {"threshold": 5, "lookback_minutes": 60})
+    config = test_config["detections"]["successful_after_brute"]
+    findings = detection.run(events, config)
     assert len(findings) == 0  # Only 2 failures before the success — below threshold
     tmp.unlink()

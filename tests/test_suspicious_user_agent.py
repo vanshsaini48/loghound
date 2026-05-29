@@ -21,22 +21,26 @@ def make_event(user_agent: str, ip: str = "10.0.0.9", referer: str = "") -> Even
     )
 
 
-def test_flags_scanner_user_agent():
-    findings = SuspiciousUserAgent().run([make_event("sqlmap/1.5.12#stable")], {})
+def test_flags_scanner_user_agent(test_config):
+    config = test_config["detections"]["suspicious_user_agent"]
+    findings = SuspiciousUserAgent().run([make_event("sqlmap/1.5.12#stable")], config)
     assert len(findings) == 1
     assert findings[0].entities["source_ip"] == "10.0.0.9"
     assert findings[0].attack_id == "T1595"
 
 
-def test_ignores_normal_browser():
+def test_ignores_normal_browser(test_config):
+    config = test_config["detections"]["suspicious_user_agent"]
     ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0"
-    assert SuspiciousUserAgent().run([make_event(ua)], {}) == []
+    assert SuspiciousUserAgent().run([make_event(ua)], config) == []
 
 
-def test_curl_without_referer_is_flagged():
-    assert len(SuspiciousUserAgent().run([make_event("curl/8.4.0")], {})) == 1
+def test_curl_without_referer_is_flagged(test_config):
+    config = test_config["detections"]["suspicious_user_agent"]
+    assert len(SuspiciousUserAgent().run([make_event("curl/8.4.0")], config)) == 1
 
 
-def test_curl_with_referer_is_ignored():
+def test_curl_with_referer_is_ignored(test_config):
+    config = test_config["detections"]["suspicious_user_agent"]
     events = [make_event("curl/8.4.0", referer="https://example.com/")]
-    assert SuspiciousUserAgent().run(events, {}) == []
+    assert SuspiciousUserAgent().run(events, config) == []

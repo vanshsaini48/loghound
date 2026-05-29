@@ -23,46 +23,48 @@ def make_event(
     )
 
 
-def test_detects_exploit_fail_then_success():
+def test_detects_exploit_fail_then_success(test_config):
     """Failures followed by success within 5min = exploit attempt."""
     base_time = datetime(2026, 5, 30, 12, 0, 0)
     events = [
         make_event("alice", "SUDO_FAILURE", base_time),
         make_event("alice", "SUDO_SUCCESS", base_time + timedelta(minutes=2)),
     ]
-    findings = PrivilegeEscalation().run(events, {})
-    # Both patterns triggered: exploit (high) + first-time (medium).
+    config = test_config["detections"]["privilege_escalation"]
+    findings = PrivilegeEscalation().run(events, config)
     assert len(findings) == 2
     exploit = next(f for f in findings if f.severity == "high")
     assert "escalation" in exploit.description.lower()
 
 
-def test_detects_first_time_sudo():
+def test_detects_first_time_sudo(test_config):
     """Any sudo success is new privilege usage if it's the first."""
     events = [
         make_event("bob", "SUDO_SUCCESS", datetime(2026, 5, 30, 12, 0, 0)),
     ]
-    findings = PrivilegeEscalation().run(events, {})
+    config = test_config["detections"]["privilege_escalation"]
+    findings = PrivilegeEscalation().run(events, config)
     assert len(findings) == 1
     assert findings[0].severity == "medium"
 
 
-def test_ignores_fail_without_success():
+def test_ignores_fail_without_success(test_config):
     """Failures alone are not a finding (may be typos)."""
     events = [
         make_event("charlie", "SUDO_FAILURE", datetime(2026, 5, 30, 12, 0, 0)),
     ]
-    assert PrivilegeEscalation().run(events, {}) == []
+    config = test_config["detections"]["privilege_escalation"]
+    assert PrivilegeEscalation().run(events, config) == []
 
 
-def test_ignores_fail_success_outside_window():
+def test_ignores_fail_success_outside_window(test_config):
     """Success outside 5min window is not an exploit, but still first-time."""
     base_time = datetime(2026, 5, 30, 12, 0, 0)
     events = [
         make_event("dave", "SUDO_FAILURE", base_time),
         make_event("dave", "SUDO_SUCCESS", base_time + timedelta(minutes=10)),
     ]
-    findings = PrivilegeEscalation().run(events, {})
-    # One finding: first-time (no exploit, outside window).
+    config = test_config["detections"]["privilege_escalation"]
+    findings = PrivilegeEscalation().run(events, config)
     assert len(findings) == 1
     assert findings[0].severity == "medium"

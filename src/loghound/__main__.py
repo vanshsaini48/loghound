@@ -1,30 +1,44 @@
 import sys
+import argparse
+import yaml
 from pathlib import Path
 from .parsers.syslog import parse_file
 from .engine import run_engine
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python -m loghound <log_file>")
+    parser = argparse.ArgumentParser(
+        description="loghound — Security log triage tool"
+    )
+    parser.add_argument(
+        "log_file",
+        type=Path,
+        help="Path to log file to analyze"
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(__file__).parent.parent.parent / "config" / "default.yaml",
+        help="Path to config file (default: config/default.yaml)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Validate log file
+    if not args.log_file.exists():
+        print(f"Error: log file not found: {args.log_file}")
         sys.exit(2)
     
-    log_path = Path(sys.argv[1])
-    if not log_path.exists():
-        print(f"Error: file not found: {log_path}")
+    # Load config
+    if not args.config.exists():
+        print(f"Error: config file not found: {args.config}")
         sys.exit(2)
+    
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
     
     # Parse events
-    events = list(parse_file(log_path))
-    print(f"Parsed {len(events)} events from {log_path}\n")
-    
-    # Default config
-    config = {
-        "detections": {
-            "ssh_brute_force": {"enabled": True, "threshold": 5, "window_minutes": 10},
-            "successful_after_brute": {"enabled": True, "threshold": 5, "lookback_minutes": 60},
-            "off_hours_login": {"enabled": True, "business_hours": {"start": "08:00", "end": "19:00"}},
-        }
-    }
+    events = list(parse_file(args.log_file))
+    print(f"Parsed {len(events)} events from {args.log_file}\n")
     
     # Run engine
     findings = run_engine(events, config)

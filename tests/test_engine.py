@@ -2,19 +2,11 @@ from pathlib import Path
 from loghound.parsers.syslog import parse_file
 from loghound.engine import run_engine
 
-def test_engine_runs_all_detections():
-    """Integration test: engine runs all three detections and sorts findings."""
+def test_engine_runs_all_detections(test_config):
+    """Integration test: engine runs all detections and sorts findings."""
     events = list(parse_file(Path('tests/fixtures/sample_auth.log')))
     
-    config = {
-        "detections": {
-            "ssh_brute_force": {"enabled": True, "threshold": 5, "window_minutes": 10},
-            "successful_after_brute": {"enabled": True, "threshold": 5, "lookback_minutes": 60},
-            "off_hours_login": {"enabled": True, "business_hours": {"start": "08:00", "end": "19:00"}},
-        }
-    }
-    
-    findings = run_engine(events, config)
+    findings = run_engine(events, test_config)
     
     # Should find:
     # - 1 SSH brute force (203.0.113.42)
