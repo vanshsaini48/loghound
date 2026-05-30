@@ -2,7 +2,7 @@ import sys
 import argparse
 import yaml
 from pathlib import Path
-from .parsers.syslog import parse_file
+from .parsers.detector import detect_and_parse
 from .engine import run_engine
 
 def main():
@@ -36,9 +36,14 @@ def main():
     with open(args.config) as f:
         config = yaml.safe_load(f)
     
-    # Parse events
-    events = list(parse_file(args.log_file))
-    print(f"Parsed {len(events)} events from {args.log_file}\n")
+    # Detect format and parse events
+    try:
+        parser_name, events_iter = detect_and_parse(args.log_file)
+        events = list(events_iter)
+        print(f"Parsed {len(events)} events from {args.log_file}\n")
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(2)
     
     # Run engine
     findings = run_engine(events, config)

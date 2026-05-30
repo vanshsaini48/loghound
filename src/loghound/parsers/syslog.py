@@ -10,8 +10,14 @@ PATTERN = re.compile(
     r'\s+(.+)$'                                           # message
 )
 
-AUTH_PATTERN = re.compile(r'for (?:invalid user )?(\S+) from (\S+)')  # -> username, source_ip
+AUTH_PATTERN = re.compile(r'for (?:invalid user )?(\S+) from (\S+)')
 
+@staticmethod
+def can_parse(sample_lines: list[str]) -> bool:
+    """Check if these lines look like syslog (auth.log)."""
+    if not sample_lines:
+        return False
+    return bool(PATTERN.match(sample_lines[0]))
 
 def parse_file(file_path: Path):
     skipped = 0
