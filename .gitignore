@@ -34,3 +34,4 @@ htmlcov/
 # Logs and local files
 *.log
 .env
+loghound-report-*.md
