@@ -7,7 +7,7 @@ FIXTURE = Path('tests/fixtures/sample_auth.log')
 
 def test_parse_returns_events():
     events = list(parse_file(FIXTURE))
-    assert len(events) == 20
+    assert len(events) == 24
 
 def test_event_is_correct_type():
     events = list(parse_file(FIXTURE))
