@@ -17,7 +17,7 @@ def main():
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(__file__).parent.parent.parent / "config" / "default.yaml",
+        default=Path(__file__).parent / "default_config.yaml",
         help="Path to config file (default: config/default.yaml)"
     )
     parser.add_argument(

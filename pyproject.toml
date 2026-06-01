@@ -10,7 +10,11 @@ requires-python = ">=3.10"
 dependencies = [
     "python-dateutil",
     "pyyaml>=6.0",
+    "textual>=0.40",
 ]
+
+[project.scripts]
+loghound = "loghound.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
@@ -20,3 +24,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+loghound = ["default_config.yaml"]
