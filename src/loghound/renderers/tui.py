@@ -109,6 +109,12 @@ class TUIApp(App):
         yield Footer()
     
     def on_mount(self) -> None:
+        severity_counts = {}
+        for f in self.findings:
+            s = f.severity.upper()
+            severity_counts[s] = severity_counts.get(s, 0) + 1
+        counts_str = ", ".join(f"{c} {s}" for s, c in severity_counts.items())
+        self.sub_title = f"{len(self.findings)} findings ({counts_str}) | {self.events_count} events processed"
         self.query_one(ListView).focus()
     
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
