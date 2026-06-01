@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Header, Footer, Static, ListView, ListItem, Label
 from textual.binding import Binding
-from ..events import Finding
+from ..events import Event, Finding
 from ..reporting.markdown import generate_markdown_report
 
 
@@ -41,6 +41,27 @@ def format_finding(finding: Finding) -> str:
     )
 
 
+def format_pivot(entity_key: str, entity_value: str,
+                 related_findings: list[Finding],
+                 related_events: list[Event]) -> str:
+    """Build the pivot view text for an entity."""
+    lines = [
+        f"PIVOT: {entity_key} = {entity_value}",
+        f"{'=' * 40}",
+        "",
+        f"Related findings ({len(related_findings)}):",
+        "",
+    ]
+    for f in related_findings:
+        lines.append(f"  [{f.severity.upper()}] {f.detection_name} @ {f.timestamp}")
+    lines.append("")
+    lines.append(f"Related events ({len(related_events)}):")
+    lines.append("")
+    for ev in related_events:
+        lines.append(f"  {ev.raw}")
+    return "\n".join(lines)
+
+
 class TUIApp(App):
     """Two-panel TUI: findings list (left) + detail pane (right)."""
     
@@ -49,9 +70,11 @@ class TUIApp(App):
         width: 40%;
         border: solid $accent;
     }
-    #details {
+    #details-scroll {
         width: 60%;
         border: solid $accent;
+    }
+    #details {
         padding: 1;
     }
     """
@@ -63,11 +86,14 @@ class TUIApp(App):
         Binding("3", "filter_medium", "Medium", show=True),
         Binding("0", "filter_all", "All", show=True),
         Binding("e", "export", "Export", show=True),
+        Binding("p", "pivot", "Pivot", show=True),
     ]
     
-    def __init__(self, findings: list[Finding], source_file: str = "", events_count: int = 0):
+    def __init__(self, findings: list[Finding], events: list[Event] | None = None,
+                 source_file: str = "", events_count: int = 0):
         super().__init__()
         self.findings = findings
+        self.events = events or []
         self.source_file = source_file
         self.events_count = events_count
         self.selected_finding: Finding | None = None
@@ -78,7 +104,8 @@ class TUIApp(App):
             with ListView(id="findings-list"):
                 for finding in self.findings:
                     yield FindingListItem(finding)
-            yield DetailsPane("Select a finding to view details", id="details")
+            with VerticalScroll(id="details-scroll"):
+                yield DetailsPane("Select a finding to view details", id="details")
         yield Footer()
     
     def on_mount(self) -> None:
@@ -123,8 +150,34 @@ class TUIApp(App):
         details = self.query_one("#details", DetailsPane)
         details.update(f"Report exported to {output_path}")
 
+    def action_pivot(self) -> None:
+        """Pivot on the selected finding's entity."""
+        if not self.selected_finding:
+            return
+        details = self.query_one("#details", DetailsPane)
+        # Pivot on the first entity (e.g. source_ip or username)
+        entities = self.selected_finding.entities
+        if not entities:
+            details.update("No entities to pivot on.")
+            return
+        entity_key, entity_value = next(iter(entities.items()))
+        # Find related findings
+        related_findings = [
+            f for f in self.findings
+            if entity_value in f.entities.values()
+        ]
+        # Find related events
+        related_events = [
+            ev for ev in self.events
+            if (ev.source_ip == entity_value or ev.username == entity_value)
+        ]
+        details.update(format_pivot(
+            entity_key, entity_value, related_findings, related_events
+        ))
 
-def run_tui(findings: list[Finding], source_file: str = "", events_count: int = 0) -> None:
+
+def run_tui(findings: list[Finding], events: list[Event] | None = None,
+            source_file: str = "", events_count: int = 0) -> None:
     """Launch the TUI with the given findings."""
-    app = TUIApp(findings, source_file, events_count)
+    app = TUIApp(findings, events, source_file, events_count)
     app.run()
