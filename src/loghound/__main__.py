@@ -76,7 +76,7 @@ def main():
     elif args.tui:
         # Launch the interactive TUI
         from .renderers.tui import run_tui
-        run_tui(findings)
+        run_tui(findings, str(args.log_file), len(events))
     else:
         # Print findings to stdout (original behavior)
         if not findings:

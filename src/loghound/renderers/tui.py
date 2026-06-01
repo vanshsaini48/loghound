@@ -1,8 +1,11 @@
+from datetime import datetime
+from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Header, Footer, Static, ListView, ListItem, Label
 from textual.binding import Binding
 from ..events import Finding
+from ..reporting.markdown import generate_markdown_report
 
 
 class FindingListItem(ListItem):
@@ -59,11 +62,14 @@ class TUIApp(App):
         Binding("2", "filter_high", "High", show=True),
         Binding("3", "filter_medium", "Medium", show=True),
         Binding("0", "filter_all", "All", show=True),
+        Binding("e", "export", "Export", show=True),
     ]
     
-    def __init__(self, findings: list[Finding]):
+    def __init__(self, findings: list[Finding], source_file: str = "", events_count: int = 0):
         super().__init__()
         self.findings = findings
+        self.source_file = source_file
+        self.events_count = events_count
         self.selected_finding: Finding | None = None
     
     def compose(self) -> ComposeResult:
@@ -106,8 +112,19 @@ class TUIApp(App):
     def action_filter_all(self) -> None:
         self._rebuild_list(None)
 
+    def action_export(self) -> None:
+        """Export findings as a Markdown report."""
+        markdown = generate_markdown_report(
+            self.findings, self.source_file, self.events_count
+        )
+        timestamp = datetime.now().isoformat(timespec="seconds").replace(":", "-")
+        output_path = Path(f"loghound-report-{timestamp}.md")
+        output_path.write_text(markdown)
+        details = self.query_one("#details", DetailsPane)
+        details.update(f"Report exported to {output_path}")
 
-def run_tui(findings: list[Finding]) -> None:
+
+def run_tui(findings: list[Finding], source_file: str = "", events_count: int = 0) -> None:
     """Launch the TUI with the given findings."""
-    app = TUIApp(findings)
+    app = TUIApp(findings, source_file, events_count)
     app.run()
