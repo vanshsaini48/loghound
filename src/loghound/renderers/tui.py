@@ -10,7 +10,6 @@ class FindingListItem(ListItem):
     
     def __init__(self, finding: Finding):
         self.finding = finding
-        # Parentheses, not brackets: brackets are Rich markup and get eaten.
         label = f"{finding.detection_name}  ({finding.severity.upper()})"
         super().__init__(Label(label))
 
@@ -56,6 +55,10 @@ class TUIApp(App):
     
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
+        Binding("1", "filter_critical", "Critical", show=True),
+        Binding("2", "filter_high", "High", show=True),
+        Binding("3", "filter_medium", "Medium", show=True),
+        Binding("0", "filter_all", "All", show=True),
     ]
     
     def __init__(self, findings: list[Finding]):
@@ -82,6 +85,26 @@ class TUIApp(App):
             self.selected_finding = item.finding
             details = self.query_one("#details", DetailsPane)
             details.update(format_finding(item.finding))
+
+    def _rebuild_list(self, severity: str | None = None) -> None:
+        """Rebuild the findings list, optionally filtered by severity."""
+        list_view = self.query_one("#findings-list", ListView)
+        list_view.clear()
+        for finding in self.findings:
+            if severity is None or finding.severity.upper() == severity:
+                list_view.append(FindingListItem(finding))
+
+    def action_filter_critical(self) -> None:
+        self._rebuild_list("CRITICAL")
+
+    def action_filter_high(self) -> None:
+        self._rebuild_list("HIGH")
+
+    def action_filter_medium(self) -> None:
+        self._rebuild_list("MEDIUM")
+
+    def action_filter_all(self) -> None:
+        self._rebuild_list(None)
 
 
 def run_tui(findings: list[Finding]) -> None:
