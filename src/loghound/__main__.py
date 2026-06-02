@@ -54,6 +54,11 @@ def main():
     import yaml
     with open(args.config) as f:
         config = yaml.safe_load(f)
+    # Validate output directory
+    if args.output and not args.output.parent.exists():
+        print(f"Error: output directory does not exist: {args.output.parent}")
+        sys.exit(2)
+
     # Detect format and parse events
     try:
         parser_name, events_iter = detect_and_parse(args.log_file, format_override=args.format)
