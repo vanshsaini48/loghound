@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from .parsers.detector import detect_and_parse
+from .parsers.merge import merge_event_streams
 from .engine import run_engine
 from .triage import run_triage
 from .reporting.markdown import generate_markdown_report
@@ -57,9 +58,10 @@ def main():
         description="loghound — Security log triage tool"
     )
     parser.add_argument(
-        "log_file",
+        "log_files",
         type=Path,
-        help="Path to log file to analyze"
+        nargs='+',
+        help="Log file(s) to analyze (supports glob patterns, e.g., auth.log*)"
     )
     parser.add_argument(
         "--format",
@@ -108,9 +110,22 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.log_file.exists():
-        print(f"Error: log file not found: {args.log_file}")
-        sys.exit(2)
+    # Expand globs and validate files exist
+    expanded_files = []
+    for pattern in args.log_files:
+        if '*' in str(pattern) or '?' in str(pattern):
+            # Glob pattern
+            matches = list(Path('.').glob(str(pattern)))
+            if not matches:
+                print(f"Error: no files match pattern: {pattern}")
+                sys.exit(2)
+            expanded_files.extend(sorted(matches))
+        else:
+            # Single file
+            if not pattern.exists():
+                print(f"Error: log file not found: {pattern}")
+                sys.exit(2)
+            expanded_files.append(pattern)
 
     if not args.config.exists():
         print(f"Error: config file not found: {args.config}")
@@ -124,12 +139,16 @@ def main():
         print(f"Error: output directory does not exist: {args.output.parent}")
         sys.exit(2)
 
-    file_size_mb = args.log_file.stat().st_size / (1024 * 1024)
-    show_progress = file_size_mb > 10 and not args.tui
+    # Determine if we should show progress
+    total_size_mb = sum(f.stat().st_size for f in expanded_files) / (1024 * 1024)
+    show_progress = total_size_mb > 10 and not args.tui
 
+    # Parse and merge events from all files
     try:
-        parser_name, events_iter = detect_and_parse(
-            args.log_file, format_override=args.format, show_progress=show_progress
+        events_iter = merge_event_streams(
+            expanded_files, 
+            format_override=args.format, 
+            show_progress=show_progress
         )
     except ValueError as e:
         print(f"Error: {e}")
@@ -153,11 +172,11 @@ def main():
         event_count = counter.count
         scored_findings = run_triage(findings, config)
 
-    print(f"Parsed {event_count} events from {args.log_file}\n")
+    print(f"Parsed {event_count} events from {len(expanded_files)} file(s)\n")
 
     if args.report:
         markdown = generate_markdown_report(
-            scored_findings, str(args.log_file), event_count
+            scored_findings, str(expanded_files[0]), event_count
         )
         if args.output:
             output_path = args.output
@@ -170,7 +189,7 @@ def main():
         print(f"Markdown report written to {output_path}")
     elif args.json:
         json_output = generate_json_report(
-            scored_findings, str(args.log_file), event_count
+            scored_findings, str(expanded_files[0]), event_count
         )
         if args.output:
             output_path = args.output
@@ -183,7 +202,7 @@ def main():
         print(f"JSON report written to {output_path}")
     elif args.tui:
         from .renderers.tui import run_tui
-        run_tui(scored_findings, events, str(args.log_file), event_count)
+        run_tui(scored_findings, events, str(expanded_files[0]), event_count)
     else:
         active = [sf for sf in scored_findings if not sf.suppressed]
         if not active:
