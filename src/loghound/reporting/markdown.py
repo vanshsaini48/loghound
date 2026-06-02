@@ -12,9 +12,15 @@ def generate_markdown_report(
     suppressed = [sf for sf in scored_findings if sf.suppressed]
 
     severity_counts = {}
+    attack_counts = {}
+
     for sf in active:
         sev = sf.finding.severity.upper()
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
+
+        if sf.finding.attack_id:
+            attack_id = sf.finding.attack_id
+            attack_counts[attack_id] = attack_counts.get(attack_id, 0) + 1
 
     report_time = datetime.now().isoformat(timespec='seconds')
 
@@ -43,6 +49,21 @@ def generate_markdown_report(
             count = severity_counts.get(severity, 0)
             if count > 0:
                 lines.append(f"| {severity} | {count} |")
+        lines.append("")
+
+    if attack_counts:
+        lines.append("## MITRE ATT&CK Summary")
+        lines.append("")
+        lines.append("| Technique | Findings |")
+        lines.append("|-----------|----------|")
+
+        for attack_id, count in sorted(
+            attack_counts.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        ):
+            lines.append(f"| {attack_id} | {count} |")
+
         lines.append("")
 
     if active:
