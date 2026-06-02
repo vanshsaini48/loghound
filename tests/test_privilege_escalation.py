@@ -1,9 +1,17 @@
-"""Tests for FR-3.6 — Privilege Escalation Indicators."""
+"""Tests for FR-3.6 — Privilege Escalation Indicators (streaming contract)."""
 
 from datetime import datetime, timedelta
 
 from loghound.events import Event
 from loghound.detections.privilege_escalation import PrivilegeEscalation
+
+
+def _run_streaming(det, events):
+    findings = []
+    for event in events:
+        findings.extend(det.process(event))
+    findings.extend(det.finalize())
+    return findings
 
 
 def make_event(
@@ -31,7 +39,7 @@ def test_detects_exploit_fail_then_success(test_config):
         make_event("alice", "SUDO_SUCCESS", base_time + timedelta(minutes=2)),
     ]
     config = test_config["detections"]["privilege_escalation"]
-    findings = PrivilegeEscalation().run(events, config)
+    findings = _run_streaming(PrivilegeEscalation(config), events)
     assert len(findings) == 2
     exploit = next(f for f in findings if f.severity == "high")
     assert "escalation" in exploit.description.lower()
@@ -43,7 +51,7 @@ def test_detects_first_time_sudo(test_config):
         make_event("bob", "SUDO_SUCCESS", datetime(2026, 5, 30, 12, 0, 0)),
     ]
     config = test_config["detections"]["privilege_escalation"]
-    findings = PrivilegeEscalation().run(events, config)
+    findings = _run_streaming(PrivilegeEscalation(config), events)
     assert len(findings) == 1
     assert findings[0].severity == "medium"
 
@@ -54,7 +62,7 @@ def test_ignores_fail_without_success(test_config):
         make_event("charlie", "SUDO_FAILURE", datetime(2026, 5, 30, 12, 0, 0)),
     ]
     config = test_config["detections"]["privilege_escalation"]
-    assert PrivilegeEscalation().run(events, config) == []
+    assert _run_streaming(PrivilegeEscalation(config), events) == []
 
 
 def test_ignores_fail_success_outside_window(test_config):
@@ -65,6 +73,6 @@ def test_ignores_fail_success_outside_window(test_config):
         make_event("dave", "SUDO_SUCCESS", base_time + timedelta(minutes=10)),
     ]
     config = test_config["detections"]["privilege_escalation"]
-    findings = PrivilegeEscalation().run(events, config)
+    findings = _run_streaming(PrivilegeEscalation(config), events)
     assert len(findings) == 1
     assert findings[0].severity == "medium"

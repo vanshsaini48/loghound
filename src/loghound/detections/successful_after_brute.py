@@ -1,60 +1,84 @@
-from collections import defaultdict
+"""FR-3.2 — Successful Login After Brute Force (streaming).
+
+Tracks failed SSH logins per IP in a lookback window. When a success
+arrives from an IP with >= threshold prior failures, emits a finding.
+State: per-IP deque of failures + flagged set.
+
+ATT&CK: T1110 (Brute Force).
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict, deque
 from datetime import timedelta
-from ..events import Event
-from ..events import Finding
+from typing import Iterable, Optional
+
+from ..events import Event, Finding
 
 
 class SuccessfulAfterBrute:
     name = "successful_after_brute"
     severity = "critical"
-    attack_id = "T1110"
+    attack_id: Optional[str] = "T1110"
 
-    def run(self, events: list[Event], config: dict) -> list[Finding]:
-        threshold = config.get("threshold", 5)
-        lookback_minutes = config.get("lookback_minutes", 60)
-        lookback = timedelta(minutes=lookback_minutes)
+    def __init__(self, config: dict) -> None:
+        self._threshold = config.get("threshold", 5)
+        self._lookback = timedelta(
+            minutes=config.get("lookback_minutes", 60)
+        )
+        self._failures: dict[str, deque] = defaultdict(deque)
+        self._flagged: set[str] = set()
 
-        # Step 1: Collect failed SSH logins, grouped by source IP
-        failures_by_ip = defaultdict(list)
-        for e in events:
-            if (e.fields.get("process") == "sshd"
-                    and "Failed password" in e.fields.get("message", "")
-                    and e.source_ip is not None):
-                failures_by_ip[e.source_ip].append(e)
+    def process(self, event: Event) -> Iterable[Finding]:
+        if event.fields.get("process") != "sshd" or event.source_ip is None:
+            return
 
-        # Step 2: Collect successful SSH logins, sorted by time
-        successes = [
-            e for e in events
-            if (e.fields.get("process") == "sshd"
-                and "Accepted password" in e.fields.get("message", "")
-                and e.source_ip is not None)
-        ]
-        successes.sort(key=lambda e: e.timestamp)
+        ip = event.source_ip
+        msg = event.fields.get("message", "")
 
-        # Step 3: For each success, did this IP rack up >= threshold failures
-        #         in the lookback window just before it?
-        findings = []
-        flagged_ips = set()
-        for success in successes:
-            source_ip = success.source_ip
-            if source_ip in flagged_ips:
-                continue  # one finding per IP
-            window_start = success.timestamp - lookback
-            prior_failures = [
-                e for e in failures_by_ip.get(source_ip, [])
-                if window_start <= e.timestamp < success.timestamp
-            ]
-            if len(prior_failures) >= threshold:
-                finding = Finding(
+        if "Failed password" in msg:
+            dq = self._failures[ip]
+            dq.append(event)
+            # Evict outside lookback window
+            cutoff = event.timestamp - self._lookback
+            while dq and dq[0].timestamp < cutoff:
+                dq.popleft()
+            return
+
+        if "Accepted password" in msg:
+            if ip in self._flagged:
+                return
+
+            dq = self._failures.get(ip, deque())
+            cutoff = event.timestamp - self._lookback
+            while dq and dq[0].timestamp < cutoff:
+                dq.popleft()
+
+            if len(dq) >= self._threshold:
+                self._flagged.add(ip)
+                prior = list(dq)
+                lookback_min = int(self._lookback.total_seconds() // 60)
+                yield Finding(
                     detection_name=self.name,
                     severity=self.severity,
-                    timestamp=success.timestamp,
-                    entities={"source_ip": source_ip},
-                    evidence=[e.raw for e in prior_failures[:threshold]] + [success.raw],
+                    timestamp=event.timestamp,
+                    entities={"source_ip": ip},
+                    evidence=[e.raw for e in prior[:self._threshold]]
+                    + [event.raw],
                     attack_id=self.attack_id,
-                    description=f"Successful SSH login from {source_ip} after {len(prior_failures)} failed attempts in the previous {lookback_minutes} minutes — possible successful brute force",
-                    false_positive_notes="A user who forgot their password, retried several times, then succeeded could trigger this. Risk is higher when the failures span multiple usernames or come from an unfamiliar IP."
+                    description=(
+                        f"Successful SSH login from {ip} after "
+                        f"{len(prior)} failed attempts in the previous "
+                        f"{lookback_min} minutes \u2014 possible successful "
+                        f"brute force"
+                    ),
+                    false_positive_notes=(
+                        "A user who forgot their password, retried several "
+                        "times, then succeeded could trigger this. Risk is "
+                        "higher when the failures span multiple usernames or "
+                        "come from an unfamiliar IP."
+                    ),
                 )
-                findings.append(finding)
-                flagged_ips.add(source_ip)
-        return findings
+
+    def finalize(self) -> Iterable[Finding]:
+        return ()

@@ -1,15 +1,19 @@
-"""FR-3.6 — Privilege Escalation Indicators.
+"""FR-3.6 — Privilege Escalation Indicators (streaming).
 
-Detects two patterns in sudo logs:
-1. Sudo successes preceded by failures within 5 minutes (exploit attempt).
-2. First-time sudo success for a user (new privilege assignment).
+Two patterns, both streaming:
+1. Sudo success preceded by failures within a 5-minute window.
+2. First-time sudo success for a user in the stream.
+
+State: per-user deque of recent failures + set of users seen.
 
 ATT&CK: T1548 (Abuse of Elevation Control Mechanisms).
 """
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
 from datetime import timedelta
+from typing import Iterable, Optional
 
 from ..events import Event, Finding
 
@@ -20,87 +24,75 @@ SUDO_FAILURE_TYPES = ("SUDO_FAILURE",)
 class PrivilegeEscalation:
     name = "privilege_escalation"
     severity = "high"
-    attack_id = "T1548"
+    attack_id: Optional[str] = "T1548"
 
-    def run(self, events: list[Event], config: dict) -> list[Finding]:
-        window = timedelta(
-            minutes=config.get("window_minutes", 5)
-        )
+    def __init__(self, config: dict) -> None:
+        self._window = timedelta(minutes=config.get("window_minutes", 5))
+        self._failures: dict[str, deque] = defaultdict(deque)
+        self._first_success_seen: set[str] = set()
 
-        # Group sudo events by username.
-        sudo_by_user: dict[str, list[Event]] = {}
-        for event in events:
-            if event.event_type not in SUDO_SUCCESS_TYPES + SUDO_FAILURE_TYPES:
-                continue
-            user = event.username or "unknown"
-            if user not in sudo_by_user:
-                sudo_by_user[user] = []
-            sudo_by_user[user].append(event)
+    def process(self, event: Event) -> Iterable[Finding]:
+        if event.event_type not in SUDO_SUCCESS_TYPES + SUDO_FAILURE_TYPES:
+            return
 
-        findings: list[Finding] = []
-        users_flagged_first_success = set()
+        user = event.username or "unknown"
 
-        for user, user_events in sudo_by_user.items():
-            user_events.sort(key=lambda e: e.timestamp)
+        if event.event_type in SUDO_FAILURE_TYPES:
+            dq = self._failures[user]
+            dq.append(event)
+            # Evict outside window
+            cutoff = event.timestamp - self._window
+            while dq and dq[0].timestamp < cutoff:
+                dq.popleft()
+            return
 
-            failures = [
-                e for e in user_events if e.event_type in SUDO_FAILURE_TYPES
-            ]
-            successes = [
-                e for e in user_events if e.event_type in SUDO_SUCCESS_TYPES
-            ]
+        # --- SUDO_SUCCESS ---
+        # Pattern 1: preceded by failures within window
+        dq = self._failures.get(user, deque())
+        cutoff = event.timestamp - self._window
+        while dq and dq[0].timestamp < cutoff:
+            dq.popleft()
 
-            # Pattern 1: Successes preceded by failures within the window.
-            for success in successes:
-                preceding_failures = [
-                    f
-                    for f in failures
-                    if success.timestamp - window <= f.timestamp < success.timestamp
-                ]
-                if preceding_failures:
-                    findings.append(
-                        Finding(
-                            detection_name=self.name,
-                            severity=self.severity,
-                            timestamp=success.timestamp,
-                            entities={"username": user},
-                            evidence=[f.raw for f in preceding_failures]
-                            + [success.raw],
-                            attack_id=self.attack_id,
-                            description=(
-                                f"Sudo privilege escalation by '{user}': "
-                                f"{len(preceding_failures)} failed attempt(s) within "
-                                f"5 minutes, then successful escalation."
-                            ),
-                            false_positive_notes=(
-                                "Legitimate users may mistype a password once. "
-                                "Verify: Is this user authorized for sudo? "
-                                "What command was escalated?"
-                            ),
-                        )
-                    )
+        if dq:
+            preceding = list(dq)
+            yield Finding(
+                detection_name=self.name,
+                severity=self.severity,
+                timestamp=event.timestamp,
+                entities={"username": user},
+                evidence=[f.raw for f in preceding] + [event.raw],
+                attack_id=self.attack_id,
+                description=(
+                    f"Sudo privilege escalation by '{user}': "
+                    f"{len(preceding)} failed attempt(s) within "
+                    f"5 minutes, then successful escalation."
+                ),
+                false_positive_notes=(
+                    "Legitimate users may mistype a password once. "
+                    "Verify: Is this user authorized for sudo? "
+                    "What command was escalated?"
+                ),
+            )
 
-            # Pattern 2: First sudo success for a user.
-            if successes and user not in users_flagged_first_success:
-                first_success = successes[0]
-                findings.append(
-                    Finding(
-                        detection_name=self.name,
-                        severity="medium",
-                        timestamp=first_success.timestamp,
-                        entities={"username": user},
-                        evidence=[first_success.raw],
-                        attack_id=self.attack_id,
-                        description=(
-                            f"First sudo usage by '{user}' at {first_success.timestamp}. "
-                            f"Indicates new or escalated privilege assignment."
-                        ),
-                        false_positive_notes=(
-                            "Expected if the user's role changed or they're newly hired. "
-                            "Verify: Is this user authorized to use sudo?"
-                        ),
-                    )
-                )
-                users_flagged_first_success.add(user)
+        # Pattern 2: first sudo success for this user
+        if user not in self._first_success_seen:
+            self._first_success_seen.add(user)
+            yield Finding(
+                detection_name=self.name,
+                severity="medium",
+                timestamp=event.timestamp,
+                entities={"username": user},
+                evidence=[event.raw],
+                attack_id=self.attack_id,
+                description=(
+                    f"First sudo usage by '{user}' at {event.timestamp}. "
+                    f"Indicates new or escalated privilege assignment."
+                ),
+                false_positive_notes=(
+                    "Expected if the user's role changed or they're newly hired. "
+                    "Verify: Is this user authorized to use sudo?"
+                ),
+            )
 
-        return findings
+    def finalize(self) -> Iterable[Finding]:
+        return ()

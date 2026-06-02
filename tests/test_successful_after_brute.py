@@ -3,12 +3,20 @@ from loghound.parsers.syslog import parse_file
 from loghound.detections.successful_after_brute import SuccessfulAfterBrute
 
 
+def _run_streaming(det, events):
+    findings = []
+    for event in events:
+        findings.extend(det.process(event))
+    findings.extend(det.finalize())
+    return findings
+
+
 def test_detects_successful_after_brute(test_config):
     """Positive case: the fixture has a brute-force run followed by a successful login."""
     events = list(parse_file(Path('tests/fixtures/sample_auth.log')))
-    detection = SuccessfulAfterBrute()
     config = test_config["detections"]["successful_after_brute"]
-    findings = detection.run(events, config)
+    det = SuccessfulAfterBrute(config)
+    findings = _run_streaming(det, events)
     assert len(findings) == 1
     assert findings[0].entities["source_ip"] == "203.0.113.42"
     assert findings[0].severity == "critical"
@@ -24,8 +32,8 @@ def test_does_not_flag_success_without_brute(test_config):
         "Mar 15 14:31:10 ubuntu-server sshd[19104]: Accepted password for root from 192.168.1.100 port 44530 ssh2\n"
     )
     events = list(parse_file(tmp))
-    detection = SuccessfulAfterBrute()
     config = test_config["detections"]["successful_after_brute"]
-    findings = detection.run(events, config)
-    assert len(findings) == 0  # Only 2 failures before the success — below threshold
+    det = SuccessfulAfterBrute(config)
+    findings = _run_streaming(det, events)
+    assert len(findings) == 0
     tmp.unlink()
