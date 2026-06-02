@@ -1,59 +1,72 @@
-from collections import defaultdict
+"""FR-3.1 — SSH Brute Force detection (streaming).
+
+Sliding window per source IP: emits when failure count in the window
+reaches the threshold. State is bounded — one deque per active IP,
+evicted as events age out.
+
+ATT&CK: T1110 (Brute Force).
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict, deque
 from datetime import timedelta
-from ..events import Event
-from ..events import Finding
+from typing import Iterable, Optional
+
+from ..events import Event, Finding
 
 
 class SSHBruteForce:
     name = "ssh_brute_force"
     severity = "high"
-    attack_id = "T1110"
+    attack_id: Optional[str] = "T1110"
 
-    def run(self, events: list[Event], config: dict) -> list[Finding]:
-        threshold = config.get("threshold", 5)
-        window_minutes = config.get("window_minutes", 10)
-        window = timedelta(minutes=window_minutes)
+    def __init__(self, config: dict) -> None:
+        self._threshold = config.get("threshold", 5)
+        self._window = timedelta(minutes=config.get("window_minutes", 10))
+        self._failures: dict[str, deque] = defaultdict(deque)
+        self._flagged: set[str] = set()
 
-        # Step 1: Filter to failed SSH logins that have a source_ip
-        failures = [
-            e for e in events
-            if (e.fields.get("process") == "sshd"
-                and "Failed password" in e.fields.get("message", "")
-                and e.source_ip is not None)
-        ]
+    def process(self, event: Event) -> Iterable[Finding]:
+        if (event.fields.get("process") != "sshd"
+                or "Failed password" not in event.fields.get("message", "")
+                or event.source_ip is None):
+            return
 
-        # Step 2: Group failures by source IP
-        by_ip = defaultdict(list)
-        for e in failures:
-            by_ip[e.source_ip].append(e)
+        ip = event.source_ip
+        if ip in self._flagged:
+            return
 
-        # Step 3: For each IP, check if it hit the threshold within the window
-        findings = []
-        for source_ip, ip_failures in by_ip.items():
-            ip_failures.sort(key=lambda e: e.timestamp)
+        dq = self._failures[ip]
+        dq.append(event)
 
-            # Sliding window: for each event, count how many fall within [event_time, event_time + window)
-            for i in range(len(ip_failures)):
-                window_start = ip_failures[i].timestamp
-                window_end = window_start + window
-                in_window = [
-                    e for e in ip_failures
-                    if window_start <= e.timestamp < window_end
-                ]
+        # Evict events outside the window
+        cutoff = event.timestamp - self._window
+        while dq and dq[0].timestamp < cutoff:
+            dq.popleft()
 
-                if len(in_window) >= threshold:
-                    # Found a brute force attempt
-                    finding = Finding(
-                        detection_name=self.name,
-                        severity=self.severity,
-                        timestamp=window_start,
-                        entities={"source_ip": source_ip},
-                        evidence=[e.raw for e in in_window[:threshold]],
-                        attack_id=self.attack_id,
-                        description=f"SSH brute force from {source_ip}: {len(in_window)} failed login attempts in {window_minutes} minutes",
-                        false_positive_notes="Could be a legitimate user repeatedly typing their password wrong, but 5+ attempts across multiple accounts within 10 minutes is rare and suspicious."
-                    )
-                    findings.append(finding)
-                    break  # One finding per IP (at the first window that crosses threshold)
+        if len(dq) >= self._threshold:
+            self._flagged.add(ip)
+            evidence = [e.raw for e in list(dq)[:self._threshold]]
+            window_min = int(self._window.total_seconds() // 60)
+            yield Finding(
+                detection_name=self.name,
+                severity=self.severity,
+                timestamp=dq[0].timestamp,
+                entities={"source_ip": ip},
+                evidence=evidence,
+                attack_id=self.attack_id,
+                description=(
+                    f"SSH brute force from {ip}: {len(dq)} failed login "
+                    f"attempts in {window_min} minutes"
+                ),
+                false_positive_notes=(
+                    "Could be a legitimate user repeatedly typing their "
+                    "password wrong, but 5+ attempts across multiple accounts "
+                    "within 10 minutes is rare and suspicious."
+                ),
+            )
+            del self._failures[ip]
 
-        return findings
+    def finalize(self) -> Iterable[Finding]:
+        return ()

@@ -5,9 +5,12 @@ from loghound.events import Event
 from loghound.detections.web_recon import WebRecon
 
 
-@pytest.fixture
-def web_recon_detector():
-    return WebRecon()
+def _run_streaming(det, events):
+    findings = []
+    for event in events:
+        findings.extend(det.process(event))
+    findings.extend(det.finalize())
+    return findings
 
 
 @pytest.fixture
@@ -15,10 +18,8 @@ def synthetic_scanner_events():
     """Simulate 60 requests from one IP, all within 5 minutes, 80% 4xx."""
     base_time = datetime(2024, 1, 1, 12, 0, 0)
     events = []
-    
     for i in range(60):
         status = "404" if i % 5 < 4 else "200"
-        
         event = Event(
             timestamp=base_time + timedelta(seconds=i * 5),
             source="apache",
@@ -33,7 +34,6 @@ def synthetic_scanner_events():
             }
         )
         events.append(event)
-    
     return events
 
 
@@ -42,7 +42,6 @@ def synthetic_legitimate_traffic():
     """Legitimate web traffic: few requests, mostly 200s."""
     base_time = datetime(2024, 1, 1, 12, 0, 0)
     events = []
-    
     for i in range(20):
         event = Event(
             timestamp=base_time + timedelta(seconds=i * 10),
@@ -58,7 +57,6 @@ def synthetic_legitimate_traffic():
             }
         )
         events.append(event)
-    
     return events
 
 
@@ -67,10 +65,8 @@ def synthetic_below_threshold():
     """40 requests (below 50 threshold) with 80% 4xx."""
     base_time = datetime(2024, 1, 1, 12, 0, 0)
     events = []
-    
     for i in range(40):
         status = "404" if i % 5 < 4 else "200"
-        
         event = Event(
             timestamp=base_time + timedelta(seconds=i * 7),
             source="apache",
@@ -85,15 +81,15 @@ def synthetic_below_threshold():
             }
         )
         events.append(event)
-    
     return events
 
 
-def test_detects_scanner_behavior(web_recon_detector, synthetic_scanner_events, test_config):
-    """Positive: 60 requests, 80% 4xx within 5 min → finding."""
+def test_detects_scanner_behavior(synthetic_scanner_events, test_config):
+    """Positive: 60 requests, 80% 4xx within 5 min -> finding."""
     config = test_config["detections"]["web_recon"]
-    findings = web_recon_detector.run(synthetic_scanner_events, config)
-    
+    det = WebRecon(config)
+    findings = _run_streaming(det, synthetic_scanner_events)
+
     assert len(findings) == 1, "Should find exactly one scanner"
     assert findings[0].detection_name == "web_recon"
     assert findings[0].severity == "high"
@@ -103,17 +99,19 @@ def test_detects_scanner_behavior(web_recon_detector, synthetic_scanner_events, 
     assert len(findings[0].evidence) > 0
 
 
-def test_skips_legitimate_traffic(web_recon_detector, synthetic_legitimate_traffic, test_config):
-    """Negative: 20 requests, high success rate → no finding."""
+def test_skips_legitimate_traffic(synthetic_legitimate_traffic, test_config):
+    """Negative: 20 requests, high success rate -> no finding."""
     config = test_config["detections"]["web_recon"]
-    findings = web_recon_detector.run(synthetic_legitimate_traffic, config)
-    
+    det = WebRecon(config)
+    findings = _run_streaming(det, synthetic_legitimate_traffic)
+
     assert len(findings) == 0, "Should not flag legitimate traffic"
 
 
-def test_respects_request_threshold(web_recon_detector, synthetic_below_threshold, test_config):
-    """Negative: 40 requests (below 50 threshold) → no finding."""
+def test_respects_request_threshold(synthetic_below_threshold, test_config):
+    """Negative: 40 requests (below 50 threshold) -> no finding."""
     config = test_config["detections"]["web_recon"]
-    findings = web_recon_detector.run(synthetic_below_threshold, config)
-    
+    det = WebRecon(config)
+    findings = _run_streaming(det, synthetic_below_threshold)
+
     assert len(findings) == 0, "Should not flag when below threshold"
