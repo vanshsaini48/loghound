@@ -1,0 +1,6 @@
+{"timestamp": "2026-06-01T10:15:30Z", "level": "INFO", "message": "User login successful", "username": "jdoe", "source_ip": "192.168.1.100"}
+{"timestamp": "2026-06-01T10:16:00Z", "level": "WARNING", "message": "Failed password for admin", "username": "admin", "source_ip": "10.0.0.50"}
+{"timestamp": "2026-06-01T10:17:00Z", "level": "ERROR", "message": "Authentication failure", "username": "root", "source_ip": "203.0.113.5", "service": "sshd"}
+this is not valid json
+{"@timestamp": "2026-06-01T10:18:00+05:30", "severity": "INFO", "msg": "Session opened", "user": "jdoe", "client_ip": "192.168.1.100"}
+{"time": 1780309200, "level": "INFO", "message": "Connection closed", "source_ip": "192.168.1.100"}
