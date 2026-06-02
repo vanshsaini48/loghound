@@ -15,7 +15,15 @@ class FindingListItem(ListItem):
     def __init__(self, finding: ScoredFinding):
         self.finding = finding
         f = finding.finding
-        label = f"{f.detection_name}  ({f.severity.upper()})"
+
+        risk_score = sum(finding.entity_risk.values())
+
+        label = (
+            f"[{risk_score:>3}] "
+            f"{f.detection_name} "
+            f"({f.severity.upper()})"
+        )
+
         super().__init__(Label(label))
 
 
@@ -30,6 +38,7 @@ class SummaryPane(Static):
 
 
 
+
 def format_finding(finding: ScoredFinding) -> str:
     """Build the detail text for a single finding."""
     f = finding.finding
@@ -37,12 +46,19 @@ def format_finding(finding: ScoredFinding) -> str:
     entities = ", ".join(f"{k}={v}" for k, v in f.entities.items())
     evidence = "\n".join(f"  - {line}" for line in f.evidence)
 
+    risk_score = sum(finding.entity_risk.values())
+    ioc_hits = ", ".join(finding.ioc_hits) if finding.ioc_hits else "None"
+
     return (
         f"{f.detection_name}  ({f.severity.upper()})\n"
         f"\n"
-        f"Time:      {f.timestamp}\n"
-        f"ATT&CK:    {f.attack_id or 'N/A'}\n"
-        f"Entities:  {entities}\n"
+        f"Time:         {f.timestamp}\n"
+        f"ATT&CK:       {f.attack_id or 'N/A'}\n"
+        f"Entities:     {entities}\n"
+        f"Risk Score:   {risk_score}\n"
+        f"Occurrences:  {finding.count}\n"
+        f"IOC Hits:     {ioc_hits}\n"
+        f"Suppressed:   {'Yes' if finding.suppressed else 'No'}\n"
         f"\n"
         f"Description:\n{f.description}\n"
         f"\n"
@@ -50,7 +66,6 @@ def format_finding(finding: ScoredFinding) -> str:
         f"\n"
         f"False-positive notes:\n{f.false_positive_notes}\n"
     )
-
 
 def format_pivot(
     entity_key: str,
@@ -83,10 +98,17 @@ def format_pivot(
     return "\n".join(lines)
 
 
+
 def build_summary(findings: list[ScoredFinding], events_count: int) -> str:
     """Build dashboard summary text."""
 
-    severity_counts = {}
+    severity_counts = {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+    }
+
     entity_risk = {}
 
     for sf in findings:
@@ -106,20 +128,23 @@ def build_summary(findings: list[ScoredFinding], events_count: int) -> str:
         f"Events Processed: {events_count}",
         f"Findings: {len(findings)}",
         "",
-        "Severity Counts:",
+        "Top Risk Entities:",
     ]
-
-    for sev, count in sorted(severity_counts.items()):
-        lines.append(f"  {sev}: {count}")
-
-    lines.append("")
-    lines.append("Top Risk Entities:")
 
     if top_entities:
         for entity, risk in top_entities:
             lines.append(f"  {entity}: {risk}")
     else:
         lines.append("  None")
+
+    lines.extend([
+        "",
+        "Severity Counts:",
+        f"  CRITICAL: {severity_counts['CRITICAL']}",
+        f"  HIGH: {severity_counts['HIGH']}",
+        f"  MEDIUM: {severity_counts['MEDIUM']}",
+        f"  LOW: {severity_counts['LOW']}",
+    ])
 
     return "\n".join(lines)
 
@@ -137,7 +162,7 @@ class TUIApp(App):
         border: solid $accent;
     }
     #summary {
-        height: 10;
+        height: 18;
         border: solid $accent;
         padding: 1;
     }
@@ -160,7 +185,13 @@ class TUIApp(App):
     def __init__(self, findings: list[ScoredFinding], events: list[Event] | None = None,
                  source_file: str = "", events_count: int = 0):
         super().__init__()
-        self.findings = findings
+        self.findings = sorted(
+            findings,
+            key=lambda sf: (
+                -sum(sf.entity_risk.values()),
+                sf.finding.detection_name,
+            ),
+        )
         self.events = events or []
         self.source_file = source_file
         self.events_count = events_count
