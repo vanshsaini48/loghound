@@ -1,31 +1,23 @@
+"""Generate professional Markdown incident reports from triage findings."""
 from datetime import datetime
-from ..events import Finding
+from ..triage.models import ScoredFinding
+
 
 def generate_markdown_report(
-    findings: list[Finding],
+    scored_findings: list[ScoredFinding],
     source_file: str,
     events_count: int,
 ) -> str:
-    """Generate a professional Markdown incident report.
+    active = [sf for sf in scored_findings if not sf.suppressed]
+    suppressed = [sf for sf in scored_findings if sf.suppressed]
 
-    Args:
-        findings: List of detected findings.
-        source_file: Path to the analyzed log file.
-        events_count: Number of events processed.
-
-    Returns:
-        Markdown string ready to write to disk.
-    """
-    # Aggregate findings by severity (normalized to uppercase)
     severity_counts = {}
-    for finding in findings:
-        sev = finding.severity.upper()
+    for sf in active:
+        sev = sf.finding.severity.upper()
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
-    # Generate report timestamp
     report_time = datetime.now().isoformat(timespec='seconds')
 
-    # Build markdown lines
     lines = []
     lines.append("# Security Log Analysis Report")
     lines.append("")
@@ -33,13 +25,18 @@ def generate_markdown_report(
     lines.append(f"**Log File:** {source_file}")
     lines.append(f"**Total Events Processed:** {events_count}")
     lines.append("")
-
     lines.append("## Executive Summary")
     lines.append("")
-    lines.append(f"Analyzed {events_count} events and detected {len(findings)} security finding(s).")
+
+    # Single summary line
+    summary = f"Analyzed {events_count} events and detected {len(active)} active finding(s)"
+    if suppressed:
+        summary += f" ({len(suppressed)} suppressed by allowlist)"
+    summary += "."
+    lines.append(summary)
     lines.append("")
 
-    if findings:
+    if active:
         lines.append("| Severity | Count |")
         lines.append("|----------|-------|")
         for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
@@ -48,69 +45,76 @@ def generate_markdown_report(
                 lines.append(f"| {severity} | {count} |")
         lines.append("")
 
-    # Brief findings table
-    if findings:
-        lines.append("## Findings Summary")
+    if active:
+        lines.append("## Active Findings")
         lines.append("")
-        lines.append("| # | Detection | Severity | Time | Entities |")
-        lines.append("|---|-----------|----------|------|----------|")
-
-        for idx, finding in enumerate(findings, 1):
-            entities_str = ", ".join(f"{k}: {v}" for k, v in finding.entities.items())
-            time_str = finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            lines.append(f"| {idx} | {finding.detection_name} | {finding.severity.upper()} | {time_str} | {entities_str} |")
-
+        lines.append("| # | Detection | Severity | Time | Entities | Risk |")
+        lines.append("|---|-----------|----------|------|----------|------|")
+        for idx, sf in enumerate(active, 1):
+            entities_str = ", ".join(f"{k}: {v}" for k, v in sf.finding.entities.items())
+            time_str = sf.finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            risk = sum(sf.entity_risk.values())
+            lines.append(
+                f"| {idx} | {sf.finding.detection_name} | {sf.finding.severity.upper()} | "
+                f"{time_str} | {entities_str} | {risk} |"
+            )
         lines.append("")
 
-    # Detailed findings sections
-    if findings:
+    if active:
         lines.append("## Detailed Findings")
         lines.append("")
-
-        for idx, finding in enumerate(findings, 1):
-            lines.append(f"### {idx}. {finding.detection_name} [{finding.severity.upper()}]")
+        for idx, sf in enumerate(active, 1):
+            lines.append(f"### {idx}. {sf.finding.detection_name} [{sf.finding.severity.upper()}]")
             lines.append("")
-
-            if finding.attack_id:
-                lines.append(f"**ATT&CK Technique:** {finding.attack_id}")
+            if sf.finding.attack_id:
+                lines.append(f"**ATT&CK Technique:** {sf.finding.attack_id}")
             else:
                 lines.append("**ATT&CK Technique:** N/A")
             lines.append("")
-
-            time_str = finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            time_str = sf.finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             lines.append(f"**Time:** {time_str}")
             lines.append("")
-
-            if finding.entities:
+            if sf.finding.entities:
                 lines.append("**Entities:**")
-                for key, value in finding.entities.items():
-                    lines.append(f"- {key}: {value}")
+                for key, value in sf.finding.entities.items():
+                    entity_key = f"{key}:{value}"
+                    risk = sf.entity_risk.get(entity_key, 0)
+                    lines.append(f"- {key}: {value} (risk: {risk})")
                 lines.append("")
-
             lines.append("**Description:**")
             lines.append("")
-            lines.append(finding.description)
+            lines.append(sf.finding.description)
             lines.append("")
-
-            if finding.evidence:
-                lines.append("**Evidence (supporting log lines):**")
+            if sf.ioc_hits:
+                lines.append("**IOC Hits:**")
+                for ioc_hit in sf.ioc_hits:
+                    lines.append(f"- {ioc_hit}")
                 lines.append("")
-                for ev in finding.evidence:
+            if sf.finding.evidence:
+                lines.append("**Evidence:**")
+                lines.append("")
+                for ev in sf.finding.evidence:
                     lines.append(f"- {ev}")
                 lines.append("")
-
             lines.append("**False Positive Notes:**")
             lines.append("")
-            if finding.false_positive_notes:
-                lines.append(finding.false_positive_notes)
-            else:
-                lines.append("None")
+            lines.append(sf.finding.false_positive_notes if sf.finding.false_positive_notes else "None")
             lines.append("")
-
             lines.append("---")
             lines.append("")
 
-    # Analyst notes placeholder
+    if suppressed:
+        lines.append("## Suppressed Findings")
+        lines.append("")
+        lines.append("The following findings were suppressed by allowlist rules:")
+        lines.append("")
+        for sf in suppressed:
+            lines.append(
+                f"- {sf.finding.detection_name}: {sf.finding.entities} "
+                f"({sf.suppression_reason})"
+            )
+        lines.append("")
+
     lines.append("## Analyst Notes")
     lines.append("")
     lines.append("*Add your analysis, context, and remediation steps below.*")

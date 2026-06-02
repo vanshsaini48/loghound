@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from .parsers.detector import detect_and_parse
 from .engine import run_engine
+from .triage import run_triage
 from .reporting.markdown import generate_markdown_report
 
 
@@ -94,18 +95,22 @@ def main():
         events = list(events_iter)
         event_count = len(events)
         findings = run_engine(iter(events), config)
+        # TODO: update TUI to handle ScoredFinding
+        scored_findings = run_triage(findings, config)
     else:
         # Streaming: events are never fully materialized
         counter = _CountingIterator(events_iter)
         findings = run_engine(counter, config)
         event_count = counter.count
+        # Run triage on findings
+        scored_findings = run_triage(findings, config)
 
     print(f"Parsed {event_count} events from {args.log_file}\n")
 
     # Output
     if args.report:
         markdown = generate_markdown_report(
-            findings, str(args.log_file), event_count
+            scored_findings, str(args.log_file), event_count
         )
         if args.output:
             output_path = args.output
@@ -118,20 +123,29 @@ def main():
         print(f"Report written to {output_path}")
     elif args.tui:
         from .renderers.tui import run_tui
-        run_tui(findings, events, str(args.log_file), event_count)
+        # TODO: update TUI to handle ScoredFinding
+        run_tui(scored_findings, events, str(args.log_file), event_count)
     else:
-        if not findings:
-            print("No findings.")
+        active = [sf for sf in scored_findings if not sf.suppressed]
+        if not active:
+            suppressed_count = len([sf for sf in scored_findings if sf.suppressed])
+            msg = "No active findings."
+            if suppressed_count:
+                msg += f" ({suppressed_count} suppressed by allowlist)"
+            print(msg)
         else:
-            print(f"Found {len(findings)} finding(s):\n")
-            for i, finding in enumerate(findings, 1):
-                print(f"{i}. [{finding.severity.upper()}] {finding.detection_name}")
-                print(f"   Time: {finding.timestamp}")
-                print(f"   Entities: {finding.entities}")
-                print(f"   Description: {finding.description}")
+            print(f"Found {len(active)} active finding(s):\n")
+            for i, sf in enumerate(active, 1):
+                print(f"{i}. [{sf.finding.severity.upper()}] {sf.finding.detection_name}")
+                print(f"   Time: {sf.finding.timestamp}")
+                print(f"   Entities: {sf.finding.entities}")
+                print(f"   Risk: {sum(sf.entity_risk.values())}")
+                print(f"   Description: {sf.finding.description}")
+                if sf.suppression_reason:
+                    print(f"   Suppression: {sf.suppression_reason}")
                 print()
 
-    sys.exit(0 if not findings else 1)
+    sys.exit(0 if not [sf for sf in scored_findings if not sf.suppressed] else 1)
 
 
 if __name__ == "__main__":
