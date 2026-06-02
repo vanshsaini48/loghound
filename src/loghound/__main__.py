@@ -76,10 +76,14 @@ def main():
         print(f"Error: output directory does not exist: {args.output.parent}")
         sys.exit(2)
 
+    # Determine if progress should be shown (file > 10 MB and not TUI)
+    file_size_mb = args.log_file.stat().st_size / (1024 * 1024)
+    show_progress = file_size_mb > 10 and not args.tui
+
     # Detect format and parse
     try:
         parser_name, events_iter = detect_and_parse(
-            args.log_file, format_override=args.format
+            args.log_file, format_override=args.format, show_progress=show_progress
         )
     except ValueError as e:
         print(f"Error: {e}")

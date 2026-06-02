@@ -6,5 +6,5 @@ def can_parse(sample_lines: list[str]) -> bool:
     return clf_can_parse(sample_lines)
 
 
-def parse_file(file_path: Path):
+def parse_file(file_path: Path, show_progress: bool = False):
     return clf_parse_file(file_path, 'apache')

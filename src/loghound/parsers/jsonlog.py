@@ -54,9 +54,9 @@ def _parse_timestamp(raw_ts) -> datetime | None:
         return None
 
 
-def parse_file(file_path: Path):
+def parse_file(file_path: Path, show_progress: bool = False):
     skipped = 0
-    with smart_open(file_path) as f:
+    with smart_open(file_path, show_progress=show_progress) as f:
         for line in f:
             line = line.strip()
             if not line:
