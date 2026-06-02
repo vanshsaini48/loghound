@@ -6,6 +6,7 @@ from .parsers.detector import detect_and_parse
 from .engine import run_engine
 from .triage import run_triage
 from .reporting.markdown import generate_markdown_report
+from .reporting.json_report import generate_json_report
 
 
 class _CountingIterator:
@@ -48,6 +49,11 @@ def main():
         help="Export findings as a Markdown report"
     )
     parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Export findings as JSON-lines (one object per line)"
+    )
+    parser.add_argument(
         "--tui",
         action="store_true",
         help="Launch the interactive terminal UI"
@@ -55,7 +61,7 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        help="Output path for Markdown report (default: loghound-report-<timestamp>.md)"
+        help="Output path for report (default: loghound-report-<timestamp>.md or .jsonl)"
     )
     args = parser.parse_args()
 
@@ -66,6 +72,7 @@ def main():
     if not args.config.exists():
         print(f"Error: config file not found: {args.config}")
         sys.exit(2)
+    
     import yaml
     with open(args.config) as f:
         config = yaml.safe_load(f)
@@ -110,7 +117,20 @@ def main():
             ).replace(":", "-")
             output_path = Path(f"loghound-report-{timestamp}.md")
         output_path.write_text(markdown)
-        print(f"Report written to {output_path}")
+        print(f"Markdown report written to {output_path}")
+    elif args.json:
+        json_output = generate_json_report(
+            scored_findings, str(args.log_file), event_count
+        )
+        if args.output:
+            output_path = args.output
+        else:
+            timestamp = datetime.now().isoformat(
+                timespec='seconds'
+            ).replace(":", "-")
+            output_path = Path(f"loghound-report-{timestamp}.jsonl")
+        output_path.write_text(json_output)
+        print(f"JSON report written to {output_path}")
     elif args.tui:
         from .renderers.tui import run_tui
         run_tui(scored_findings, events, str(args.log_file), event_count)
