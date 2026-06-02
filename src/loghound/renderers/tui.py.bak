@@ -24,40 +24,28 @@ class DetailsPane(Static):
     pass
 
 
-class SummaryPane(Static):
-    """Top summary dashboard."""
-    pass
-
-
-
 def format_finding(finding: ScoredFinding) -> str:
     """Build the detail text for a single finding."""
-    f = finding.finding
-
-    entities = ", ".join(f"{k}={v}" for k, v in f.entities.items())
-    evidence = "\n".join(f"  - {line}" for line in f.evidence)
-
+    entities = ", ".join(f"{k}={v}" for k, v in finding.entities.items())
+    evidence = "\n".join(f"  - {line}" for line in finding.evidence)
     return (
-        f"{f.detection_name}  ({f.severity.upper()})\n"
+        f"{finding.detection_name}  ({finding.finding.severity.upper()})\n"
         f"\n"
-        f"Time:      {f.timestamp}\n"
-        f"ATT&CK:    {f.attack_id or 'N/A'}\n"
+        f"Time:      {finding.timestamp}\n"
+        f"ATT&CK:    {finding.attack_id or 'N/A'}\n"
         f"Entities:  {entities}\n"
         f"\n"
-        f"Description:\n{f.description}\n"
+        f"Description:\n{finding.description}\n"
         f"\n"
         f"Evidence:\n{evidence}\n"
         f"\n"
-        f"False-positive notes:\n{f.false_positive_notes}\n"
+        f"False-positive notes:\n{finding.false_positive_notes}\n"
     )
 
 
-def format_pivot(
-    entity_key: str,
-    entity_value: str,
-    related_findings: list[ScoredFinding],
-    related_events: list[Event],
-) -> str:
+def format_pivot(entity_key: str, entity_value: str,
+                 related_findings: list[Finding],
+                 related_events: list[Event]) -> str:
     """Build the pivot view text for an entity."""
     lines = [
         f"PIVOT: {entity_key} = {entity_value}",
@@ -66,61 +54,13 @@ def format_pivot(
         f"Related findings ({len(related_findings)}):",
         "",
     ]
-
-    for sf in related_findings:
-        f = sf.finding
-        lines.append(
-            f"  [{f.severity.upper()}] {f.detection_name} @ {f.timestamp}"
-        )
-
+    for f in related_findings:
+        lines.append(f"  [{f.severity.upper()}] {f.detection_name} @ {f.timestamp}")
     lines.append("")
     lines.append(f"Related events ({len(related_events)}):")
     lines.append("")
-
     for ev in related_events:
         lines.append(f"  {ev.raw}")
-
-    return "\n".join(lines)
-
-
-def build_summary(findings: list[ScoredFinding], events_count: int) -> str:
-    """Build dashboard summary text."""
-
-    severity_counts = {}
-    entity_risk = {}
-
-    for sf in findings:
-        sev = sf.finding.severity.upper()
-        severity_counts[sev] = severity_counts.get(sev, 0) + 1
-
-        for entity, risk in sf.entity_risk.items():
-            entity_risk[entity] = entity_risk.get(entity, 0) + risk
-
-    top_entities = sorted(
-        entity_risk.items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )[:5]
-
-    lines = [
-        f"Events Processed: {events_count}",
-        f"Findings: {len(findings)}",
-        "",
-        "Severity Counts:",
-    ]
-
-    for sev, count in sorted(severity_counts.items()):
-        lines.append(f"  {sev}: {count}")
-
-    lines.append("")
-    lines.append("Top Risk Entities:")
-
-    if top_entities:
-        for entity, risk in top_entities:
-            lines.append(f"  {entity}: {risk}")
-    else:
-        lines.append("  None")
-
     return "\n".join(lines)
 
 
@@ -136,12 +76,6 @@ class TUIApp(App):
         width: 60%;
         border: solid $accent;
     }
-    #summary {
-        height: 10;
-        border: solid $accent;
-        padding: 1;
-    }
-
     #details {
         padding: 1;
     }
@@ -168,23 +102,12 @@ class TUIApp(App):
     
     def compose(self) -> ComposeResult:
         yield Header()
-
-        yield SummaryPane(
-            build_summary(self.findings, self.events_count),
-            id="summary",
-        )
-
         with Horizontal():
             with ListView(id="findings-list"):
                 for finding in self.findings:
                     yield FindingListItem(finding)
-
             with VerticalScroll(id="details-scroll"):
-                yield DetailsPane(
-                    "Select a finding to view details",
-                    id="details",
-                )
-
+                yield DetailsPane("Select a finding to view details", id="details")
         yield Footer()
     
     def on_mount(self) -> None:

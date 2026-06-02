@@ -1,31 +1,38 @@
 import pytest
+
 from loghound.events import Finding
+from loghound.triage.models import ScoredFinding
 from loghound.renderers.tui import TUIApp
 
 
 @pytest.fixture
 def sample_findings():
-    """Two test findings with distinct names and severities."""
+    """Two triaged findings with distinct names and severities."""
+
     return [
-        Finding(
-            detection_name="ssh_brute_force",
-            severity="HIGH",
-            timestamp=None,
-            entities={"source_ip": "203.0.113.42"},
-            evidence=["line 1", "line 2"],
-            attack_id="T1110",
-            description="Test brute force",
-            false_positive_notes="None",
+        ScoredFinding(
+            finding=Finding(
+                detection_name="ssh_brute_force",
+                severity="HIGH",
+                timestamp=None,
+                entities={"source_ip": "203.0.113.42"},
+                evidence=["line 1", "line 2"],
+                attack_id="T1110",
+                description="Test brute force",
+                false_positive_notes="None",
+            )
         ),
-        Finding(
-            detection_name="privilege_escalation",
-            severity="MEDIUM",
-            timestamp=None,
-            entities={"username": "testuser"},
-            evidence=["line 3"],
-            attack_id="T1548",
-            description="Test privesc",
-            false_positive_notes="None",
+        ScoredFinding(
+            finding=Finding(
+                detection_name="privilege_escalation",
+                severity="MEDIUM",
+                timestamp=None,
+                entities={"username": "testuser"},
+                evidence=["line 3"],
+                attack_id="T1548",
+                description="Test privesc",
+                false_positive_notes="None",
+            )
         ),
     ]
 
@@ -33,20 +40,18 @@ def sample_findings():
 @pytest.mark.asyncio
 async def test_tui_selection_updates_detail_pane(sample_findings):
     """Arrow-down moves the selection; detail pane repaints with the new finding."""
+
     app = TUIApp(sample_findings)
 
     async with app.run_test() as pilot:
         await pilot.pause()
 
-        # Initial state: first finding should be displayed
         details_text = str(app.query_one("#details").render())
         assert "ssh_brute_force" in details_text
 
-        # Arrow down to the second finding
         await pilot.press("down")
         await pilot.pause()
 
-        # Detail pane should now show the second finding
         details_text = str(app.query_one("#details").render())
         assert "privilege_escalation" in details_text
         assert "ssh_brute_force" not in details_text
