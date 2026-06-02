@@ -4,6 +4,16 @@ from loghound.events import Event
 from loghound.parsers.syslog import parse_file
 from loghound.detections.off_hours_login import OffHoursLogin
 
+
+def _run_streaming(det, events):
+    """Helper: drive a streaming detection over a list of events."""
+    findings = []
+    for event in events:
+        findings.extend(det.process(event))
+    findings.extend(det.finalize())
+    return findings
+
+
 def test_detects_off_hours_login(test_config):
     """Positive test: login at 2 AM should flag."""
     events = [
@@ -20,11 +30,11 @@ def test_detects_off_hours_login(test_config):
             }
         )
     ]
-    
-    config = test_config.get("business_hours", {})
-    detection = OffHoursLogin()
-    findings = detection.run(events, {"business_hours": config})
-    
+
+    bh = test_config.get("business_hours", {})
+    det = OffHoursLogin({"business_hours": bh})
+    findings = _run_streaming(det, events)
+
     assert len(findings) == 1
     assert findings[0].entities["source_ip"] == "203.0.113.99"
     assert findings[0].severity == "medium"
@@ -34,9 +44,9 @@ def test_detects_off_hours_login(test_config):
 def test_does_not_flag_business_hours_login(test_config):
     """Negative test: login at 2 PM should not flag."""
     events = list(parse_file(Path('tests/fixtures/sample_auth.log')))
-    
-    config = test_config.get("business_hours", {})
-    detection = OffHoursLogin()
-    findings = detection.run(events, {"business_hours": config})
-    
+
+    bh = test_config.get("business_hours", {})
+    det = OffHoursLogin({"business_hours": bh})
+    findings = _run_streaming(det, events)
+
     assert len(findings) == 0

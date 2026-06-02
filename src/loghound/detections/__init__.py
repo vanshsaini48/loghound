@@ -5,11 +5,12 @@ from .web_recon import WebRecon
 from .suspicious_user_agent import SuspiciousUserAgent
 from .privilege_escalation import PrivilegeEscalation
 
+# Class references, not instances. The engine instantiates per run.
 REGISTRY = [
-    SSHBruteForce(),
-    SuccessfulAfterBrute(),
-    OffHoursLogin(),
-    WebRecon(),
-    SuspiciousUserAgent(),
-    PrivilegeEscalation(),
+    OffHoursLogin,
+    SuspiciousUserAgent,
+    SSHBruteForce,
+    SuccessfulAfterBrute,
+    WebRecon,
+    PrivilegeEscalation,
 ]

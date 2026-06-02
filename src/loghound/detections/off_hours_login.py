@@ -1,51 +1,62 @@
+"""FR-3.3 — Off-Hours Authentication (streaming).
+
+Flags successful SSH logins outside configurable business hours.
+Stateless: each event is evaluated independently.
+
+ATT&CK: T1078 (Valid Accounts).
+"""
+
+from __future__ import annotations
+
 from datetime import time
-from ..events import Event
-from ..events import Finding
+from typing import Iterable, Optional
+
+from ..events import Event, Finding
+
 
 class OffHoursLogin:
     name = "off_hours_login"
     severity = "medium"
-    attack_id = "T1078"
+    attack_id: Optional[str] = "T1078"
 
-    def run(self, events: list[Event], config: dict) -> list[Finding]:
-        # Extract business hours from config
-        business_hours_config = config.get("business_hours", {})
-        start_str = business_hours_config.get("start", "08:00")
-        end_str = business_hours_config.get("end", "19:00")
-        
-        # Parse start and end times
-        start_time = self._parse_time(start_str)
-        end_time = self._parse_time(end_str)
-        
-        # Filter to successful SSH logins
-        successes = [
-            e for e in events
-            if (e.fields.get("process") == "sshd"
-                and "Accepted password" in e.fields.get("message", "")
-                and e.source_ip is not None)
-        ]
-        
-        # Check each success against business hours
-        findings = []
-        for e in successes:
-            event_time = e.timestamp.time()
-            if not (start_time <= event_time < end_time):
-                # Outside business hours
-                finding = Finding(
-                    detection_name=self.name,
-                    severity=self.severity,
-                    timestamp=e.timestamp,
-                    entities={"username": e.username or "unknown", "source_ip": e.source_ip},
-                    evidence=[e.raw],
-                    attack_id=self.attack_id,
-                    description=f"SSH login from {e.source_ip} outside business hours ({start_str}–{end_str})",
-                    false_positive_notes="Off-hours logins can be legitimate for on-call staff, developers in different timezones, or automated processes. Cross-reference with known on-call schedules."
-                )
-                findings.append(finding)
-        
-        return findings
-    
-    def _parse_time(self, time_str: str) -> time:
-        """Parse 'HH:MM' string to time object."""
+    def __init__(self, config: dict) -> None:
+        bh = config.get("business_hours", {})
+        self._start_str = bh.get("start", "08:00")
+        self._end_str = bh.get("end", "19:00")
+        self._start = self._parse_time(self._start_str)
+        self._end = self._parse_time(self._end_str)
+
+    def process(self, event: Event) -> Iterable[Finding]:
+        if (event.fields.get("process") != "sshd"
+                or "Accepted password" not in event.fields.get("message", "")
+                or event.source_ip is None):
+            return
+
+        event_time = event.timestamp.time()
+        if not (self._start <= event_time < self._end):
+            yield Finding(
+                detection_name=self.name,
+                severity=self.severity,
+                timestamp=event.timestamp,
+                entities={"username": event.username or "unknown",
+                          "source_ip": event.source_ip},
+                evidence=[event.raw],
+                attack_id=self.attack_id,
+                description=(
+                    f"SSH login from {event.source_ip} outside business hours "
+                    f"({self._start_str}\u2013{self._end_str})"
+                ),
+                false_positive_notes=(
+                    "Off-hours logins can be legitimate for on-call staff, "
+                    "developers in different timezones, or automated processes. "
+                    "Cross-reference with known on-call schedules."
+                ),
+            )
+
+    def finalize(self) -> Iterable[Finding]:
+        return ()
+
+    @staticmethod
+    def _parse_time(time_str: str) -> time:
         h, m = map(int, time_str.split(":"))
         return time(h, m)
