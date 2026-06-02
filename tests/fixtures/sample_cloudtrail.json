@@ -1,0 +1,133 @@
+{
+  "Records": [
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T08:00:00Z",
+      "eventSource": "signin.amazonaws.com",
+      "eventName": "ConsoleLogin",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "203.0.113.50",
+      "userAgent": "Mozilla/5.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/alice",
+        "userName": "alice",
+        "principalId": "AIDA1234567890",
+        "sessionContext": {
+          "attributes": {
+            "mfaAuthenticated": "true"
+          }
+        }
+      },
+      "requestParameters": null,
+      "responseElements": {"ConsoleLogin": "Success"}
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T09:15:00Z",
+      "eventSource": "signin.amazonaws.com",
+      "eventName": "ConsoleLogin",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.77",
+      "userAgent": "Mozilla/5.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/mallory",
+        "userName": "mallory",
+        "principalId": "AIDA0987654321",
+        "sessionContext": {
+          "attributes": {
+            "mfaAuthenticated": "false"
+          }
+        }
+      },
+      "requestParameters": null,
+      "responseElements": {"ConsoleLogin": "Success"}
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T09:30:00Z",
+      "eventSource": "iam.amazonaws.com",
+      "eventName": "CreateAccessKey",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.77",
+      "userAgent": "aws-cli/2.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/mallory",
+        "userName": "mallory",
+        "principalId": "AIDA0987654321"
+      },
+      "requestParameters": {"userName": "backdoor-user"},
+      "responseElements": {"accessKey": {"accessKeyId": "AKIA1234EXAMPLE", "status": "Active", "userName": "backdoor-user"}}
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T09:45:00Z",
+      "eventSource": "iam.amazonaws.com",
+      "eventName": "PutUserPolicy",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.77",
+      "userAgent": "aws-cli/2.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/mallory",
+        "userName": "mallory",
+        "principalId": "AIDA0987654321"
+      },
+      "requestParameters": {"userName": "backdoor-user", "policyName": "AdminAccess", "policyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"}]}"},
+      "responseElements": null
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T10:00:00Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "PutBucketPolicy",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.77",
+      "userAgent": "aws-cli/2.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/mallory",
+        "userName": "mallory",
+        "principalId": "AIDA0987654321"
+      },
+      "requestParameters": {"bucketName": "company-secrets", "bucketPolicy": {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::company-secrets/*"}]}},
+      "responseElements": null
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T10:30:00Z",
+      "eventSource": "ec2.amazonaws.com",
+      "eventName": "DescribeInstances",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "192.168.1.50",
+      "userAgent": "aws-cli/2.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/alice",
+        "userName": "alice",
+        "principalId": "AIDA1234567890"
+      },
+      "requestParameters": {},
+      "responseElements": null
+    },
+    {
+      "eventVersion": "1.08",
+      "eventTime": "2026-03-15T11:00:00Z",
+      "eventSource": "iam.amazonaws.com",
+      "eventName": "AttachUserPolicy",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.77",
+      "userAgent": "aws-cli/2.0",
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/mallory",
+        "userName": "mallory",
+        "principalId": "AIDA0987654321"
+      },
+      "requestParameters": {"userName": "mallory", "policyArn": "arn:aws:iam::aws:policy/AdministratorAccess"},
+      "responseElements": null
+    }
+  ]
+}

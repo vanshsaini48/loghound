@@ -1,14 +1,15 @@
 from pathlib import Path
-from . import syslog, apache, nginx, jsonlog
+from . import syslog, apache, nginx, cloudtrail, jsonlog
 from .reader import smart_open
 
-PARSERS = [syslog, apache, nginx, jsonlog]
+PARSERS = [syslog, apache, nginx, cloudtrail, jsonlog]
 FORMAT_MAP = {
     'syslog': syslog,
     'apache': apache,
     'nginx': nginx,
     'json': jsonlog,
     'jsonlog': jsonlog,
+    'cloudtrail': cloudtrail,
 }
 
 def detect_and_parse(file_path: Path, format_override: str = None, show_progress: bool = False):

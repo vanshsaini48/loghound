@@ -1,0 +1,6 @@
+Mar 15 09:10:00 ubuntu-server sshd[12001]: Failed password for root from 198.51.100.1 port 44400 ssh2
+Mar 15 09:10:05 ubuntu-server sshd[12002]: Failed password for root from 198.51.100.1 port 44401 ssh2
+Mar 15 09:10:10 ubuntu-server sshd[12003]: Failed password for root from 198.51.100.1 port 44402 ssh2
+Mar 15 09:10:15 ubuntu-server sshd[12004]: Failed password for root from 198.51.100.1 port 44403 ssh2
+Mar 15 09:10:20 ubuntu-server sshd[12005]: Failed password for root from 198.51.100.1 port 44404 ssh2
+Mar 15 09:10:25 ubuntu-server sshd[12006]: Accepted password for admin from 198.51.100.1 port 44405 ssh2

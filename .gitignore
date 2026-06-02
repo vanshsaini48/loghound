@@ -33,5 +33,6 @@ htmlcov/
 
 # Logs and local files
 *.log
+!tests/fixtures/*.log
 .env
 loghound-report-*.md

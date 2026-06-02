@@ -29,3 +29,14 @@ detections:
   
   suspicious_user_agent:
     enabled: true
+
+  password_spraying:
+    enabled: true
+    distinct_users: 10
+    window_minutes: 15
+
+  new_ip_for_user:
+    enabled: true
+
+  cloudtrail_sensitive:
+    enabled: true

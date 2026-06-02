@@ -11,8 +11,10 @@ def test_engine_runs_all_detections(test_config):
     # Should find:
     # - 1 SSH brute force (203.0.113.42)
     # - 1 successful after brute (203.0.113.42)
+    # - 1 privilege escalation (jdoe first sudo)
+    # - 1 new IP for user (jdoe from attacker IP after known IP)
     # - 0 off-hours logins (all successes are within 08:00-19:00)
-    assert len(findings) == 3
+    assert len(findings) == 4
     
     # First finding should be "successful_after_brute" (critical > high)
     assert findings[0].detection_name == "successful_after_brute"

@@ -4,6 +4,9 @@ from .off_hours_login import OffHoursLogin
 from .web_recon import WebRecon
 from .suspicious_user_agent import SuspiciousUserAgent
 from .privilege_escalation import PrivilegeEscalation
+from .password_spraying import PasswordSpraying
+from .new_ip_for_user import NewIPForUser
+from .cloudtrail_sensitive import CloudTrailSensitive
 
 # Class references, not instances. The engine instantiates per run.
 REGISTRY = [
@@ -13,4 +16,7 @@ REGISTRY = [
     SuccessfulAfterBrute,
     WebRecon,
     PrivilegeEscalation,
+    PasswordSpraying,
+    NewIPForUser,
+    CloudTrailSensitive,
 ]

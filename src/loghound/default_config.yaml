@@ -29,10 +29,22 @@ detections:
   
   suspicious_user_agent:
     enabled: true
+
+  password_spraying:
+    enabled: true
+    distinct_users: 10
+    window_minutes: 15
+
+  new_ip_for_user:
+    enabled: true
+
+  cloudtrail_sensitive:
+    enabled: true
+
 allowlist:
   ips: []
   users: []
 
 ioc:
-  list_path: "default"  # "default" = bundled list; or path to custom file
-  bonus: 5              # bonus risk points for IOC match
+  list_path: "default"
+  bonus: 5
