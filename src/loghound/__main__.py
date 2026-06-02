@@ -5,6 +5,20 @@ from pathlib import Path
 from .parsers.detector import detect_and_parse
 from .engine import run_engine
 from .reporting.markdown import generate_markdown_report
+
+
+class _CountingIterator:
+    """Wraps an iterator, counts items yielded."""
+    def __init__(self, it):
+        self._it = it
+        self.count = 0
+
+    def __iter__(self):
+        for item in self._it:
+            self.count += 1
+            yield item
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="loghound — Security log triage tool"
@@ -43,10 +57,12 @@ def main():
         help="Output path for Markdown report (default: loghound-report-<timestamp>.md)"
     )
     args = parser.parse_args()
+
     # Validate log file
     if not args.log_file.exists():
         print(f"Error: log file not found: {args.log_file}")
         sys.exit(2)
+
     # Load config
     if not args.config.exists():
         print(f"Error: config file not found: {args.config}")
@@ -54,43 +70,52 @@ def main():
     import yaml
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
     # Validate output directory
     if args.output and not args.output.parent.exists():
         print(f"Error: output directory does not exist: {args.output.parent}")
         sys.exit(2)
 
-    # Detect format and parse events
+    # Detect format and parse
     try:
-        parser_name, events_iter = detect_and_parse(args.log_file, format_override=args.format)
-        events = list(events_iter)
-        print(f"Parsed {len(events)} events from {args.log_file}\n")
+        parser_name, events_iter = detect_and_parse(
+            args.log_file, format_override=args.format
+        )
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(2)
-    # Run engine
-    findings = run_engine(events, config)
-    # Output findings
+
+    if args.tui:
+        # TUI needs the full event list for pivot and raw-event display
+        events = list(events_iter)
+        event_count = len(events)
+        findings = run_engine(iter(events), config)
+    else:
+        # Streaming: events are never fully materialized
+        counter = _CountingIterator(events_iter)
+        findings = run_engine(counter, config)
+        event_count = counter.count
+
+    print(f"Parsed {event_count} events from {args.log_file}\n")
+
+    # Output
     if args.report:
-        # Export as Markdown report
         markdown = generate_markdown_report(
-            findings,
-            str(args.log_file),
-            len(events)
+            findings, str(args.log_file), event_count
         )
         if args.output:
             output_path = args.output
         else:
-            # Generate default filename with timestamp
-            timestamp = datetime.now().isoformat(timespec='seconds').replace(":", "-")
+            timestamp = datetime.now().isoformat(
+                timespec='seconds'
+            ).replace(":", "-")
             output_path = Path(f"loghound-report-{timestamp}.md")
         output_path.write_text(markdown)
         print(f"Report written to {output_path}")
     elif args.tui:
-        # Launch the interactive TUI
         from .renderers.tui import run_tui
-        run_tui(findings, events, str(args.log_file), len(events))
+        run_tui(findings, events, str(args.log_file), event_count)
     else:
-        # Print findings to stdout (original behavior)
         if not findings:
             print("No findings.")
         else:
@@ -101,7 +126,9 @@ def main():
                 print(f"   Entities: {finding.entities}")
                 print(f"   Description: {finding.description}")
                 print()
-    # Exit codes: 0 if no findings, 1 if findings exist
+
     sys.exit(0 if not findings else 1)
+
+
 if __name__ == "__main__":
     main()
