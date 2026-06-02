@@ -2,6 +2,17 @@
 from datetime import datetime
 from ..triage.models import ScoredFinding
 
+ATTACK_NAMES = {
+    "T1110": "Brute Force",
+    "T1110.003": "Password Spraying",
+    "T1078": "Valid Accounts",
+    "T1078.004": "Cloud Accounts",
+    "T1098": "Account Manipulation",
+    "T1190": "Exploit Public-Facing Application",
+    "T1548": "Abuse Elevation Control Mechanism",
+    "T1595": "Active Scanning",
+}
+
 
 def generate_markdown_report(
     scored_findings: list[ScoredFinding],
@@ -54,15 +65,19 @@ def generate_markdown_report(
     if attack_counts:
         lines.append("## MITRE ATT&CK Summary")
         lines.append("")
-        lines.append("| Technique | Findings |")
-        lines.append("|-----------|----------|")
+        lines.append("| Technique | Name | Findings |")
+        lines.append("|-----------|------|----------|")
 
         for attack_id, count in sorted(
             attack_counts.items(),
             key=lambda x: x[1],
             reverse=True,
         ):
-            lines.append(f"| {attack_id} | {count} |")
+            name = ATTACK_NAMES.get(attack_id, "Unknown")
+
+            lines.append(
+                f"| {attack_id} | {name} | {count} |"
+            )
 
         lines.append("")
 
@@ -77,7 +92,11 @@ def generate_markdown_report(
             key=lambda x: x.finding.timestamp,
         ):
             time_str = sf.finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            attack = sf.finding.attack_id or "N/A"
+            attack_id = sf.finding.attack_id
+            if attack_id:
+                attack = f"{attack_id} ({ATTACK_NAMES.get(attack_id, 'Unknown')})"
+            else:
+                attack = "N/A"
 
             lines.append(
                 f"| {time_str} | "
@@ -109,7 +128,10 @@ def generate_markdown_report(
             lines.append(f"### {idx}. {sf.finding.detection_name} [{sf.finding.severity.upper()}]")
             lines.append("")
             if sf.finding.attack_id:
-                lines.append(f"**ATT&CK Technique:** {sf.finding.attack_id}")
+                name = ATTACK_NAMES.get(sf.finding.attack_id, "Unknown")
+                lines.append(
+                    f"**ATT&CK Technique:** {sf.finding.attack_id} ({name})"
+                )
             else:
                 lines.append("**ATT&CK Technique:** N/A")
             lines.append("")
