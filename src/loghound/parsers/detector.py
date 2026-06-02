@@ -1,7 +1,7 @@
 from pathlib import Path
-from . import syslog, apache, jsonlog
+from . import syslog, apache, nginx, jsonlog
 
-PARSERS = [syslog, apache, jsonlog]
+PARSERS = [syslog, apache, nginx, jsonlog]
 
 def detect_and_parse(file_path: Path):
     """

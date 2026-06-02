@@ -7,4 +7,4 @@ def can_parse(sample_lines: list[str]) -> bool:
 
 
 def parse_file(file_path: Path):
-    return clf_parse_file(file_path, 'apache')
+    return clf_parse_file(file_path, 'nginx')
