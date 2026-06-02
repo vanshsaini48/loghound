@@ -67,6 +67,27 @@ def generate_markdown_report(
         lines.append("")
 
     if active:
+        lines.append("## Investigation Timeline")
+        lines.append("")
+        lines.append("| Time | Detection | ATT&CK |")
+        lines.append("|------|-----------|--------|")
+
+        for sf in sorted(
+            active,
+            key=lambda x: x.finding.timestamp,
+        ):
+            time_str = sf.finding.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            attack = sf.finding.attack_id or "N/A"
+
+            lines.append(
+                f"| {time_str} | "
+                f"{sf.finding.detection_name} | "
+                f"{attack} |"
+            )
+
+        lines.append("")
+
+    if active:
         lines.append("## Active Findings")
         lines.append("")
         lines.append("| # | Detection | Severity | Time | Entities | Risk |")

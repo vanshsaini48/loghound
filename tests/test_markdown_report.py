@@ -108,3 +108,34 @@ def test_report_shows_entity_risk_scores():
     
     # Risk should appear in summary table
     assert "| Risk |" in report
+
+def test_report_shows_investigation_timeline():
+    findings = [
+        _make_scored_finding(
+            _make_finding(
+                detection_name="late_event",
+                attack_id="T1548",
+                timestamp=datetime(2026, 5, 31, 3, 0, 0),
+            )
+        ),
+        _make_scored_finding(
+            _make_finding(
+                detection_name="early_event",
+                attack_id="T1110",
+                timestamp=datetime(2026, 5, 31, 2, 0, 0),
+            )
+        ),
+    ]
+
+    report = generate_markdown_report(
+        findings,
+        source_file="auth.log",
+        events_count=2,
+    )
+
+    assert "## Investigation Timeline" in report
+
+    early_pos = report.index("early_event")
+    late_pos = report.index("late_event")
+
+    assert early_pos < late_pos
