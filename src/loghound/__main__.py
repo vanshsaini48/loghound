@@ -108,6 +108,11 @@ def main():
         type=Path,
         help="Output path for report (default: loghound-report-<timestamp>.md or .jsonl)"
     )
+    parser.add_argument(
+        "--ioc-file",
+        type=Path,
+        help="Override IOC list file for this run"
+    )
     args = parser.parse_args()
 
     # Expand globs and validate files exist
@@ -134,6 +139,10 @@ def main():
     import yaml
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    if args.ioc_file:
+        config.setdefault("ioc", {})
+        config["ioc"]["list_path"] = str(args.ioc_file)
 
     if args.output and not args.output.parent.exists():
         print(f"Error: output directory does not exist: {args.output.parent}")
