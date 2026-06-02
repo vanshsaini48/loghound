@@ -29,3 +29,10 @@ detections:
   
   suspicious_user_agent:
     enabled: true
+allowlist:
+  ips: []
+  users: []
+
+ioc:
+  list_path: "default"  # "default" = bundled list; or path to custom file
+  bonus: 5              # bonus risk points for IOC match
