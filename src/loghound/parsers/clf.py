@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from ..events import Event
 from .reader import smart_open
 
@@ -33,7 +33,7 @@ def clf_parse_file(file_path: Path, parser_label: str = 'clf'):
             match = CLF_PATTERN.match(line)
             if match:
                 yield Event(
-                    timestamp=datetime.strptime(match.group(2), '%d/%b/%Y:%H:%M:%S %z'),
+                    timestamp=datetime.strptime(match.group(2), '%d/%b/%Y:%H:%M:%S %z').astimezone(timezone.utc),
                     source=str(file_path),
                     event_type='HTTP_REQUEST',
                     source_ip=match.group(1),

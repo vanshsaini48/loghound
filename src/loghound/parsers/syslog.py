@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from datetime import timezone
 from dateutil import parser as dateutil_parser
 from ..events import Event
 from .reader import smart_open
@@ -61,7 +62,7 @@ def parse_file(file_path: Path):
                 if process == "sudo" and username is None:
                     username = _extract_sudo_user(message)
                 yield Event(
-                    timestamp=dateutil_parser.parse(match.group(1)),
+                    timestamp=dateutil_parser.parse(match.group(1)).replace(tzinfo=timezone.utc),
                     source=str(file_path),
                     event_type=event_type,
                     source_ip=source_ip,
