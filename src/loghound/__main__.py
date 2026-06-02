@@ -1,6 +1,6 @@
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from .parsers.detector import detect_and_parse
 from .engine import run_engine
@@ -19,6 +19,37 @@ class _CountingIterator:
         for item in self._it:
             self.count += 1
             yield item
+
+
+def _filter_by_time(events_iter, since_str, until_str):
+    """Filter events to a time window. Yields only events within [since, until)."""
+    since_dt = None
+    until_dt = None
+    
+    if since_str:
+        try:
+            since_dt = datetime.fromisoformat(since_str)
+            # If naive, assume UTC
+            if since_dt.tzinfo is None:
+                since_dt = since_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise ValueError(f"Invalid --since format: {since_str}. Use ISO 8601 (e.g., 2026-06-01T00:00:00)")
+    
+    if until_str:
+        try:
+            until_dt = datetime.fromisoformat(until_str)
+            # If naive, assume UTC
+            if until_dt.tzinfo is None:
+                until_dt = until_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise ValueError(f"Invalid --until format: {until_str}. Use ISO 8601 (e.g., 2026-06-02T23:59:59)")
+    
+    for event in events_iter:
+        if since_dt and event.timestamp < since_dt:
+            continue
+        if until_dt and event.timestamp >= until_dt:
+            continue
+        yield event
 
 
 def main():
@@ -42,6 +73,18 @@ def main():
         type=Path,
         default=Path(__file__).parent / "default_config.yaml",
         help="Path to config file (default: config/default.yaml)"
+    )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="Only process events at or after this timestamp (ISO 8601 format, e.g., 2026-06-01T00:00:00)"
+    )
+    parser.add_argument(
+        "--until",
+        type=str,
+        default=None,
+        help="Only process events before this timestamp (ISO 8601 format, e.g., 2026-06-02T23:59:59)"
     )
     parser.add_argument(
         "--report",
@@ -88,6 +131,13 @@ def main():
         parser_name, events_iter = detect_and_parse(
             args.log_file, format_override=args.format, show_progress=show_progress
         )
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(2)
+
+    # Apply time filtering
+    try:
+        events_iter = _filter_by_time(events_iter, args.since, args.until)
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(2)
