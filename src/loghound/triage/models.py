@@ -5,10 +5,10 @@ from ..events import Finding
 
 @dataclass(frozen=True)
 class ScoredFinding:
-    """A Finding with triage metadata: suppression, IOC hits, and entity risk scores."""
+    """A Finding with triage metadata: suppression, IOC hits, entity risk scores, and dedup count."""
     finding: Finding
     suppressed: bool = False
     suppression_reason: str | None = None
     ioc_hits: list[str] = field(default_factory=list)
     entity_risk: dict[str, int] = field(default_factory=dict)
-    # entity_risk maps "ip:10.0.1.1" or "user:alice" → risk score
+    count: int = 1  # How many times this finding was deduplicated

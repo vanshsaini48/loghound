@@ -59,12 +59,10 @@ def main():
     )
     args = parser.parse_args()
 
-    # Validate log file
     if not args.log_file.exists():
         print(f"Error: log file not found: {args.log_file}")
         sys.exit(2)
 
-    # Load config
     if not args.config.exists():
         print(f"Error: config file not found: {args.config}")
         sys.exit(2)
@@ -72,16 +70,13 @@ def main():
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    # Validate output directory
     if args.output and not args.output.parent.exists():
         print(f"Error: output directory does not exist: {args.output.parent}")
         sys.exit(2)
 
-    # Determine if progress should be shown (file > 10 MB and not TUI)
     file_size_mb = args.log_file.stat().st_size / (1024 * 1024)
     show_progress = file_size_mb > 10 and not args.tui
 
-    # Detect format and parse
     try:
         parser_name, events_iter = detect_and_parse(
             args.log_file, format_override=args.format, show_progress=show_progress
@@ -91,23 +86,18 @@ def main():
         sys.exit(2)
 
     if args.tui:
-        # TUI needs the full event list for pivot and raw-event display
         events = list(events_iter)
         event_count = len(events)
         findings = run_engine(iter(events), config)
-        # TODO: update TUI to handle ScoredFinding
         scored_findings = run_triage(findings, config)
     else:
-        # Streaming: events are never fully materialized
         counter = _CountingIterator(events_iter)
         findings = run_engine(counter, config)
         event_count = counter.count
-        # Run triage on findings
         scored_findings = run_triage(findings, config)
 
     print(f"Parsed {event_count} events from {args.log_file}\n")
 
-    # Output
     if args.report:
         markdown = generate_markdown_report(
             scored_findings, str(args.log_file), event_count
@@ -123,7 +113,6 @@ def main():
         print(f"Report written to {output_path}")
     elif args.tui:
         from .renderers.tui import run_tui
-        # TODO: update TUI to handle ScoredFinding
         run_tui(scored_findings, events, str(args.log_file), event_count)
     else:
         active = [sf for sf in scored_findings if not sf.suppressed]
@@ -139,6 +128,8 @@ def main():
                 print(f"{i}. [{sf.finding.severity.upper()}] {sf.finding.detection_name}")
                 print(f"   Time: {sf.finding.timestamp}")
                 print(f"   Entities: {sf.finding.entities}")
+                if sf.count > 1:
+                    print(f"   Occurrences: {sf.count}")
                 print(f"   Risk: {sum(sf.entity_risk.values())}")
                 print(f"   Description: {sf.finding.description}")
                 if sf.suppression_reason:
