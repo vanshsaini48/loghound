@@ -1,5 +1,6 @@
 from pathlib import Path
 from . import syslog, apache, nginx, jsonlog
+from .reader import smart_open
 
 PARSERS = [syslog, apache, nginx, jsonlog]
 
@@ -11,7 +12,7 @@ def detect_and_parse(file_path: Path):
     """
     # Read first 50 lines to sample
     sample_lines = []
-    with open(file_path) as f:
+    with smart_open(file_path) as f:
         for i, line in enumerate(f):
             if i >= 50:
                 break

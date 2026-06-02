@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from dateutil import parser as dateutil_parser
 from ..events import Event
+from .reader import smart_open
 
 TIMESTAMP_KEYS = ['timestamp', 'time', '@timestamp', 'ts', 'datetime']
 IP_KEYS = ['source_ip', 'src_ip', 'remote_addr', 'client_ip', 'ip']
@@ -55,7 +56,7 @@ def _parse_timestamp(raw_ts) -> datetime | None:
 
 def parse_file(file_path: Path):
     skipped = 0
-    with open(file_path) as f:
+    with smart_open(file_path) as f:
         for line in f:
             line = line.strip()
             if not line:

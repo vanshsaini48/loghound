@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from ..events import Event
+from .reader import smart_open
 
 # Combined Log Format — shared by Apache and Nginx default configs
 CLF_PATTERN = re.compile(
@@ -24,7 +25,7 @@ def clf_can_parse(sample_lines: list[str]) -> bool:
 
 def clf_parse_file(file_path: Path, parser_label: str = 'clf'):
     skipped = 0
-    with open(file_path) as f:
+    with smart_open(file_path) as f:
         for line in f:
             line = line.strip()
             if not line:

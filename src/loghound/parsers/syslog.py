@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from dateutil import parser as dateutil_parser
 from ..events import Event
+from .reader import smart_open
 PATTERN = re.compile(
     r'^([A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})'  # timestamp
     r'\s+(\S+)'                                           # hostname
@@ -45,7 +46,7 @@ def _extract_sudo_user(message: str) -> str | None:
     return None
 def parse_file(file_path: Path):
     skipped = 0
-    with open(file_path) as f:
+    with smart_open(file_path) as f:
         for line in f:
             line = line.strip()
             match = PATTERN.match(line)
