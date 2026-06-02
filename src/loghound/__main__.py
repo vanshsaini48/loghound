@@ -15,6 +15,13 @@ def main():
         help="Path to log file to analyze"
     )
     parser.add_argument(
+        "--format",
+        type=str,
+        choices=["syslog", "apache", "nginx", "json"],
+        default=None,
+        help="Override auto-detection with a specific log format"
+    )
+    parser.add_argument(
         "--config",
         type=Path,
         default=Path(__file__).parent / "default_config.yaml",
@@ -49,7 +56,7 @@ def main():
         config = yaml.safe_load(f)
     # Detect format and parse events
     try:
-        parser_name, events_iter = detect_and_parse(args.log_file)
+        parser_name, events_iter = detect_and_parse(args.log_file, format_override=args.format)
         events = list(events_iter)
         print(f"Parsed {len(events)} events from {args.log_file}\n")
     except ValueError as e:

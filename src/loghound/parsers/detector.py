@@ -4,12 +4,27 @@ from .reader import smart_open
 
 PARSERS = [syslog, apache, nginx, jsonlog]
 
-def detect_and_parse(file_path: Path):
+FORMAT_MAP = {
+    'syslog': syslog,
+    'apache': apache,
+    'nginx': nginx,
+    'json': jsonlog,
+    'jsonlog': jsonlog,
+}
+
+def detect_and_parse(file_path: Path, format_override: str = None):
     """
     Auto-detect log format and parse the file.
     Tries each parser's can_parse() until one matches.
     Returns (parser_name, events_iterator).
     """
+    if format_override:
+        parser = FORMAT_MAP.get(format_override)
+        if parser is None:
+            raise ValueError(f"Unknown format: {format_override}. Valid formats: {', '.join(sorted(FORMAT_MAP))}")
+        print(f"[detector] Using format override: {format_override}")
+        return format_override, parser.parse_file(file_path)
+
     # Read first 50 lines to sample
     sample_lines = []
     with smart_open(file_path) as f:
