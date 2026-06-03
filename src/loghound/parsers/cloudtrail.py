@@ -8,31 +8,55 @@ from .reader import smart_open
 
 
 def can_parse(sample_lines: list[str]) -> bool:
-    """CloudTrail logs are JSON with 'Records' key or eventID."""
+    """CloudTrail logs: JSON with 'Records' key or individual events."""
+    if not sample_lines:
+        return False
+    
+    # Try to parse as individual JSON lines
     for line in sample_lines[:10]:
-        try:
-            obj = json.loads(line)
-            if "Records" in obj or ("eventID" in obj and "eventSource" in obj):
-                return True
-        except (json.JSONDecodeError, TypeError):
-            pass
+        line = line.strip()
+        if not line or line.startswith("{"):
+            try:
+                obj = json.loads(line)
+                if "Records" in obj or ("eventID" in obj and "eventSource" in obj):
+                    return True
+            except json.JSONDecodeError:
+                pass
+    
+    # Try to parse multi-line
+    joined = "\n".join(sample_lines[:50])
+    if '"Records"' in joined or ('"eventID"' in joined and '"eventSource"' in joined):
+        return True
+    
     return False
 
 
 def parse_file(file_path: Path, show_progress: bool = False):
     """Parse a CloudTrail JSON file and yield events."""
     with smart_open(file_path, show_progress=show_progress) as f:
+        content = f.read()
+    
+    # Try to parse as single JSON object (bulk export)
+    try:
+        obj = json.loads(content)
+        records = obj.get("Records", [])
+        if records:
+            for record in records:
+                event = _parse_record(record)
+                if event:
+                    yield event
+            return
+    except json.JSONDecodeError:
+        pass
+    
+    # Fall back to line-by-line parsing
+    with smart_open(file_path, show_progress=show_progress) as f:
         for event in parse(f):
             yield event
 
 
 def parse(lines):
-    """Parse CloudTrail JSON events.
-    
-    Each line is either:
-    - A JSON object with 'Records' array (bulk export)
-    - A single CloudTrail record (streaming format)
-    """
+    """Parse CloudTrail JSON events (line-by-line)."""
     for line in lines:
         line = line.strip()
         if not line:
@@ -43,7 +67,6 @@ def parse(lines):
         except json.JSONDecodeError:
             continue
         
-        # Handle Records array
         records = obj.get("Records", [])
         if not records:
             records = [obj]
@@ -57,38 +80,58 @@ def parse(lines):
                 pass
 
 
+def _extract_username_from_arn(arn: str) -> str | None:
+    """Extract username from ARN like arn:aws:iam::123456789012:user/alice."""
+    if not arn or ":user/" not in arn and ":role/" not in arn:
+        return None
+    
+    # Split by : and take the last part (user/alice)
+    parts = arn.split(":")
+    if len(parts) >= 6:
+        resource = parts[-1]  # "user/alice" or "role/something"
+        if "/" in resource:
+            return resource  # "user/alice"
+    
+    return None
+
+
 def _parse_record(record: dict) -> Event | None:
     """Convert a CloudTrail record to an Event."""
     
-    # Extract timestamp
     event_time_str = record.get("eventTime")
     if not event_time_str:
         return None
     
     try:
-        # CloudTrail uses ISO format: 2026-03-15T14:31:23Z
         timestamp = datetime.fromisoformat(event_time_str.replace("Z", "+00:00"))
     except ValueError:
         return None
     
-    # Extract IPs and user
     source_ip = record.get("sourceIPAddress")
-    username = record.get("userIdentity", {}).get("principalId")
+    user_identity = record.get("userIdentity", {})
+    
+    # Extract username: prefer ARN, then userName, then principalId
+    username = None
+    arn = user_identity.get("arn")
+    if arn:
+        username = _extract_username_from_arn(arn)
+    if not username:
+        username = user_identity.get("userName") or user_identity.get("principalId")
     
     event_name = record.get("eventName", "")
     event_source = record.get("eventSource", "cloudtrail")
-    
-    # Build evidence string
     raw = json.dumps(record, default=str)
     
-    # Store source-specific data in fields
+    mfa_auth = user_identity.get("sessionContext", {}).get("attributes", {}).get("mfaAuthenticated", "")
+    
     fields = {
-        "eventName": event_name,
-        "eventSource": event_source,
-        "awsRegion": record.get("awsRegion", ""),
-        "userAgent": record.get("userAgent", ""),
-        "errorCode": record.get("errorCode", ""),
-        "errorMessage": record.get("errorMessage", ""),
+        "event_name": event_name,
+        "event_source": event_source,
+        "aws_region": record.get("awsRegion", ""),
+        "user_agent": record.get("userAgent", ""),
+        "error_code": record.get("errorCode", ""),
+        "error_message": record.get("errorMessage", ""),
+        "mfa_authenticated": mfa_auth,
     }
     
     return Event(
