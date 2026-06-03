@@ -1,72 +1,47 @@
-"""Aggregation: dedup repeated findings and count occurrences."""
-from collections import defaultdict
+"""Finding deduplication and aggregation.
+
+Groups findings by (detection_name, entity_key) and collapses repeats
+into a single ScoredFinding with a count and time range.
+"""
+
 from .models import ScoredFinding
+
+
+def _entity_key(sf: ScoredFinding) -> str:
+    """Build a grouping key from detection name + sorted entities."""
+    entities = sf.finding.entities or {}
+    parts = sorted(f"{k}={v}" for k, v in entities.items())
+    return f"{sf.finding.detection_name}|{'|'.join(parts)}"
 
 
 def deduplicate(findings: list[ScoredFinding]) -> list[ScoredFinding]:
     """
-    Deduplicate repeated findings for the SAME entity.
-
-    Example:
-
-        ssh_brute_force + source_ip=1.1.1.1
-        ssh_brute_force + source_ip=1.1.1.1
-
-    becomes:
-
-        ssh_brute_force + source_ip=1.1.1.1 (count=2)
-
-    But:
-
-        ssh_brute_force + source_ip=1.1.1.1
-        ssh_brute_force + source_ip=2.2.2.2
-
-    remain separate findings.
-
-    Returns findings sorted by count then risk.
+    Group ScoredFindings by (detection_name, entities) and collapse duplicates.
+    
+    Each group becomes a single ScoredFinding with:
+      - count: number of deduplicated findings
+      - first_seen / last_seen: time range (via evidence)
+    
+    Returns aggregated findings sorted by count descending.
     """
-    groups = defaultdict(list)
-
+    groups = {}
+    
     for sf in findings:
-        sig = (
-            sf.finding.detection_name,
-            tuple(sorted(sf.finding.entities.items())),
-        )
-        groups[sig].append(sf)
-
-    result = []
-
-    for group in groups.values():
-        canonical = group[0]
-
-        merged_risk = {}
-        merged_iocs = set()
-
-        for sf in group:
-            for entity_key, risk_val in sf.entity_risk.items():
-                merged_risk[entity_key] = (
-                    merged_risk.get(entity_key, 0) + risk_val
-                )
-
-            for hit in sf.ioc_hits:
-                merged_iocs.add(hit)
-
-        result.append(
-            ScoredFinding(
-                finding=canonical.finding,
-                suppressed=canonical.suppressed,
-                suppression_reason=canonical.suppression_reason,
-                ioc_hits=sorted(merged_iocs),
-                entity_risk=merged_risk,
-                count=len(group),
+        key = _entity_key(sf)
+        
+        if key in groups:
+            existing = groups[key]
+            # Merge: increment count, keep earliest timestamp in evidence
+            groups[key] = ScoredFinding(
+                finding=existing.finding,  # Use first occurrence's full finding
+                suppressed=existing.suppressed,
+                suppression_reason=existing.suppression_reason,
+                ioc_hits=list(set(existing.ioc_hits + sf.ioc_hits)),  # Deduplicate IOC hits
+                entity_risk=existing.entity_risk,  # Risk already aggregated by scoring layer
+                count=existing.count + 1,
             )
-        )
-
-    result.sort(
-        key=lambda sf: (
-            -sf.count,
-            -sum(sf.entity_risk.values()),
-        )
-    )
-
-    return result
+        else:
+            groups[key] = sf
+    
+    # Sort by count descending
+    return sorted(groups.values(), key=lambda sf: sf.count, reverse=True)

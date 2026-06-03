@@ -1,5 +1,5 @@
-"""Triage layer: filter, score, deduplicate, and rank findings."""
-from .models import ScoredFinding
+"""Triage layer: allowlist, IOC matching, scoring, aggregation."""
+
 from .pipeline import run_triage
 
-__all__ = ["ScoredFinding", "run_triage"]
+__all__ = ["run_triage"]
