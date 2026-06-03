@@ -1,126 +1,74 @@
-"""FR-3.9 — CloudTrail Sensitive Actions detection (streaming).
+"""Detection for sensitive CloudTrail actions (IAM, S3, console login).
 
-Flags high-risk AWS API calls visible in CloudTrail:
-  - IAM policy changes (PutUserPolicy, AttachUserPolicy, AttachRolePolicy, etc.)
-  - Access key creation (CreateAccessKey)
-  - S3 bucket policy made public (PutBucketPolicy with Principal: "*")
-  - ConsoleLogin without MFA
+Flags:
+- IAM policy changes (CreatePolicy, AttachUserPolicy, etc.)
+- Access key creation (CreateAccessKey)
+- S3 bucket policy made public (PutBucketPolicy)
+- Console login without MFA (ConsoleLogin with MFARequired error)
 
-ATT&CK: T1078.004 (Cloud Accounts), T1098 (Account Manipulation).
+ATT&CK: T1078.004 (Cloud Account), T1098 (Account Manipulation)
 """
 
-from __future__ import annotations
-
-import json
 from typing import Iterable, Optional
-
 from ..events import Event, Finding
-
-# IAM mutation events that indicate privilege changes
-IAM_SENSITIVE_EVENTS = {
-    "CreateAccessKey",
-    "PutUserPolicy",
-    "PutRolePolicy",
-    "PutGroupPolicy",
-    "AttachUserPolicy",
-    "AttachRolePolicy",
-    "AttachGroupPolicy",
-    "CreateUser",
-    "CreateRole",
-    "AddUserToGroup",
-    "CreateLoginProfile",
-    "UpdateLoginProfile",
-}
 
 
 class CloudTrailSensitive:
-    name = "cloudtrail_sensitive"
+    """Detect sensitive CloudTrail actions."""
+    
+    name = "cloudtrail_sensitive_actions"
     severity = "high"
-    attack_id: Optional[str] = "T1098"
-
-    def __init__(self, config: dict) -> None:
-        pass
-
+    attack_id: Optional[str] = "T1078.004"
+    
+    def __init__(self, config: dict):
+        self.config = config
+        self.enabled_actions = config.get("enabled_actions", [
+            "CreateAccessKey",
+            "CreatePolicy",
+            "AttachUserPolicy",
+            "PutBucketPolicy",
+            "ConsoleLogin",
+        ])
+    
     def process(self, event: Event) -> Iterable[Finding]:
+        """Check if this event is a sensitive CloudTrail action."""
         if event.source != "cloudtrail":
             return
-
-        event_name = event.fields.get("event_name", "")
-
-        # Check ConsoleLogin without MFA
-        if event_name == "ConsoleLogin":
-            mfa = event.fields.get("mfa_authenticated", "")
-            if mfa == "false":
-                yield Finding(
-                    detection_name=self.name,
-                    severity="high",
-                    timestamp=event.timestamp,
-                    entities={
-                        "username": event.username or "unknown",
-                        "source_ip": event.source_ip or "unknown",
-                    },
-                    evidence=[event.raw[:500]],
-                    attack_id="T1078.004",
-                    description=(
-                        f"AWS ConsoleLogin without MFA by "
-                        f"'{event.username}' from {event.source_ip}"
-                    ),
-                    false_positive_notes=(
-                        "Some service accounts or federated logins may not "
-                        "use MFA. Verify this is an interactive user account "
-                        "and that MFA should be required."
-                    ),
-                )
+        
+        event_name = event.fields.get("eventName", "")
+        
+        # Check for sensitive actions
+        if event_name not in self.enabled_actions:
             return
-
-        # Check IAM sensitive actions
-        if event_name in IAM_SENSITIVE_EVENTS:
-            yield Finding(
-                detection_name=self.name,
-                severity="high",
-                timestamp=event.timestamp,
-                entities={
-                    "username": event.username or "unknown",
-                    "source_ip": event.source_ip or "unknown",
-                },
-                evidence=[event.raw[:500]],
-                attack_id="T1098",
-                description=(
-                    f"Sensitive IAM action '{event_name}' by "
-                    f"'{event.username}' from {event.source_ip}"
-                ),
-                false_positive_notes=(
-                    "IAM changes are normal during infrastructure "
-                    "provisioning. Suspicious if performed by an unexpected "
-                    "user, from an unusual IP, or outside change windows."
-                ),
-            )
-            return
-
-        # Check S3 bucket policy made public
-        if event_name == "PutBucketPolicy":
-            req_params = event.fields.get("request_parameters", "")
-            if '"Principal": "*"' in req_params or '"Principal":"*"' in req_params:
-                yield Finding(
-                    detection_name=self.name,
-                    severity="critical",
-                    timestamp=event.timestamp,
-                    entities={
-                        "username": event.username or "unknown",
-                        "source_ip": event.source_ip or "unknown",
-                    },
-                    evidence=[event.raw[:500]],
-                    attack_id="T1098",
-                    description=(
-                        f"S3 bucket policy set to public access by "
-                        f"'{event.username}' from {event.source_ip}"
-                    ),
-                    false_positive_notes=(
-                        "Some buckets (static websites, public datasets) "
-                        "are intentionally public. Verify the bucket name "
-                        "and whether public access is authorized."
-                    ),
-                )
-
+        
+        description = ""
+        if event_name == "CreateAccessKey":
+            description = f"New access key created in CloudTrail"
+        elif event_name == "PutBucketPolicy":
+            description = "S3 bucket policy changed"
+        elif event_name == "ConsoleLogin":
+            error_code = event.fields.get("errorCode", "")
+            if error_code == "MFARequired":
+                description = "Console login attempted without MFA"
+            else:
+                description = "Console login detected"
+        else:
+            description = f"Sensitive CloudTrail action: {event_name}"
+        
+        yield Finding(
+            detection_name=self.name,
+            severity=self.severity,
+            timestamp=event.timestamp,
+            entities={
+                "username": event.username or "unknown",
+                "source_ip": event.source_ip or "unknown",
+            },
+            evidence=[event.raw[:200]],
+            attack_id=self.attack_id,
+            description=description,
+            false_positive_notes="Verify the user and action are authorized for this account.",
+        )
+    
     def finalize(self) -> Iterable[Finding]:
-        return ()
+        """No end-of-stream findings for this detection."""
+        return []
