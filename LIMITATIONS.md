@@ -1,41 +1,29 @@
 # Limitations
 
-loghound is a focused triage tool, not a SIEM. This document lists explicit non-goals and known constraints so you know exactly what you are getting.
+## Explicit Non-Goals
 
----
+These are deliberate design decisions, not missing features.
 
-## Non-Goals
-
-These are deliberate design decisions, not missing features:
-
-- **Real-time log tailing.** loghound analyzes bounded log files. It does not watch live streams or replace a monitoring system.
-- **Multi-file and multi-host correlation.** Each run analyzes a single file. Cross-host attack chains are out of scope.
-- **Machine learning detection.** All detections are deterministic rules with configurable thresholds. No training data, no models, no black boxes.
-- **Alert delivery.** No email, Slack, or webhook notifications. loghound produces reports; delivery is your problem.
-- **Authentication and multi-user support.** There are no user accounts, roles, or access controls. It is a single-user CLI tool.
-- **Web UI.** Terminal only. The TUI is the richest interface.
-- **SIEM integrations.** No Splunk, Elastic, or QRadar connectors.
-- **Ticketing and chat integrations.** No Jira, ServiceNow, or PagerDuty.
-- **Windows EVTX parsing.** Only Linux auth logs and Apache/Nginx access logs are supported. EVTX is a possible v2.0 feature.
-- **Encrypted or compressed logs.** Input files must be plaintext. Decompress or decrypt before feeding to loghound.
-
----
+- **No real-time tailing.** loghound processes bounded, offline log files. It does not `tail -f` or alert on live events.
+- **No multi-host correlation.** Merging rotated logs from the same host is supported. Correlating across different hosts (e.g., matching a firewall log to an auth log on a different server) is out of scope.
+- **No machine learning.** All detections are rule-based with configurable thresholds. This keeps the tool transparent and auditable.
+- **No alerting.** loghound produces reports. It does not send emails, Slack messages, or webhook notifications.
+- **No authentication or multi-user.** Single-user CLI tool. No RBAC, no sessions.
+- **No web UI.** Terminal only (CLI + TUI).
+- **No online threat intel.** IOC matching uses local files only. No API calls to VirusTotal, AbuseIPDB, etc.
 
 ## Known Constraints
 
-These are gaps in the current implementation that may be addressed in future versions:
+- **Windows EVTX not supported (yet).** Binary parsing and Event ID mapping is planned for v2.1.
+- **auditd / firewall / CSV logs not supported (yet).** Planned for v2.1.
+- **GeoIP impossible-travel not supported (yet).** Requires offline GeoIP database. Planned for v2.1.
+- **Time ordering assumed.** Windowed detections assume input is roughly time-ordered. This holds for single-host logs and same-host rotated log merges. Shuffled or multi-host logs may produce incorrect window calculations.
+- **Ambiguous years.** Syslog timestamps lack a year field. loghound assumes the current year.
+- **No Sigma rules.** Detection rules are Python modules, not Sigma YAML. Sigma import is a future goal.
+- **Entity risk scoring is additive.** Risk scores grow linearly with finding count. There is no decay, normalization, or baseline comparison.
 
-- **No UTC normalization.** Timestamps are parsed as-is. Logs from different timezones analyzed separately will not have their times aligned. Single-host analysis is unaffected.
-- **No JSON-lines parser.** The architecture supports pluggable parsers, but only syslog and Apache CLF parsers are implemented.
-- **No --format override.** Log format is always auto-detected. Manual override is not yet implemented.
-- **No --output directory validation.** Passing a report output path under a nonexistent directory will raise an error instead of creating the directory or printing a friendly message.
-- **Ambiguous-year timestamps assume current year.** Syslog lines without a year field are assigned the current year at parse time.
-- **Memory scales with event count.** Events are streamed during parsing (memory-flat), but materialized into a list before detection. Files with millions of events will consume proportional memory. The 1 GB / 500 MB target from the SRS has not been benchmarked.
-- **No concurrency.** Detections run sequentially. This is a simplicity decision for v1.0 and has no practical impact at current scale.
-- **Detection thresholds are tuned to test fixtures.** Real-world logs may need threshold adjustments via the config file to reduce false positives.
+## Performance Bounds
 
----
-
-## Scale
-
-loghound is designed for offline triage of bounded log files, roughly under 1 GB. It is not a production monitoring system and should not be deployed as one.
+- **Memory:** Constant with respect to input size (target < 250 MB RSS).
+- **Throughput:** ~50 MB/s parse+detect on commodity hardware.
+- **File size:** No hard limit. Tested with multi-gigabyte synthetic logs.

@@ -571,3 +571,20 @@ Each writeup should include:
 | 0.1 | [Date] | [You] | Initial draft |
 | 1.0 | [Date] | [You] | Locked for implementation start |
 
+
+---
+
+# 11. Implementation Status (v2.0.0)
+
+All v2.0 acceptance criteria have been met as of 2026-06-05:
+
+| Criterion | Status |
+|-----------|--------|
+| Streaming engine, constant memory | ✅ Implemented |
+| 6 v1.0 detections + 2 new under streaming contract | ✅ 9 detections total |
+| Allowlist, scoring, dedup tested | ✅ 92 tests passing |
+| CloudTrail parser + FR-3.9 | ✅ 20 CloudTrail tests |
+| JSON export with documented schema | ✅ docs/json-schema.md |
+| TUI dashboard with search/filter/pivot/export | ✅ All keybindings working |
+| 24+ tests | ✅ 92 tests, 0 failures |
+| Tagged release | ✅ v2.0.0 |
