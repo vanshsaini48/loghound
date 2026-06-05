@@ -36,3 +36,5 @@ htmlcov/
 !tests/fixtures/*.log
 .env
 loghound-report-*.md
+tests/fixtures/large_auth.log
+tests/fixtures/large_auth.log
