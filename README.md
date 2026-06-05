@@ -5,7 +5,13 @@ A terminal tool for security log triage. Feed it a log file, get back a prioriti
 
 Built for junior SOC analysts, cybersecurity students, and CTF participants who need to triage auth logs and web access logs without spinning up a SIEM.
 
-<!-- TODO: demo GIF here -->
+![LogHound Demo — Automated](demo_automated.gif)
+
+*Automated demo: format detection, detections, reports, JSON export.*
+
+![LogHound TUI — Interactive](demo_interactive_tui.gif)
+
+*Interactive TUI: live search, sort, pivot on entities, export.*
 
 ---
 
