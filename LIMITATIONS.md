@@ -27,3 +27,19 @@ These are deliberate design decisions, not missing features.
 - **Memory:** Constant with respect to input size (target < 250 MB RSS).
 - **Throughput:** ~50 MB/s parse+detect on commodity hardware.
 - **File size:** No hard limit. Tested with multi-gigabyte synthetic logs.
+
+## Memory Usage
+
+**v2.0 Behavior:** Linear memory growth (~2x input file size).
+
+**Test Results (500 MB synthetic auth.log):**
+- Peak memory: ~1 GB
+- Events processed: 4.6M
+- Findings detected: 864 (deduplicated)
+- Parse + detect time: ~13 minutes
+
+**Why:** Events and findings are materialized for simplicity. Entity risk scoring requires two-pass algorithm.
+
+**Scaling:** Memory usage is O(n) where n = input size. For gigabyte-scale logs, split by day/hour first.
+
+**Future (v2.1):** Streaming scoring with O(1) memory will require removing deduplication or implementing approximate dedup.
